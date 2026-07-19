@@ -549,7 +549,9 @@ function SetupScreen({ onDone }) {
 }
 
 function LoginScreen({ onLogin }) {
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get("u") || ""; } catch { return ""; }
+  });
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
