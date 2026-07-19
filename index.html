@@ -2028,7 +2028,20 @@ function HistoryModal({ grade, stream, onClose }) {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
   const [userSession, setUserSession] = useState(() => {
-    try { const s = localStorage.getItem("sision_user_session"); return s ? JSON.parse(s) : null; } catch { return null; }
+    try {
+      const urlUser = new URLSearchParams(window.location.search).get("u");
+      const s = localStorage.getItem("sision_user_session");
+      if (!s) return null;
+      const parsed = JSON.parse(s);
+      // If this link was meant for a specific person (via ?u=) and it doesn't
+      // match whoever is currently remembered on this device, don't silently
+      // resume the wrong person's session — force a fresh login instead.
+      if (urlUser && parsed && parsed.username !== urlUser.trim().toLowerCase()) {
+        localStorage.removeItem("sision_user_session");
+        return null;
+      }
+      return parsed;
+    } catch { return null; }
   });
     function logout() {
     try { localStorage.removeItem("sision_user_session"); } catch {}
