@@ -392,11 +392,7 @@ async function saveDB(db, retries) {
     const body = { message: "Update marks", content, branch: "main" };
     if (DB_SHA) body.sha = DB_SHA;
     const res = await fetch(dbUrl(), { method: "PUT", headers: ghH(), body: JSON.stringify(body) });
-    if (res.status === 409 && retries > 0) {
-      await loadDB(true);
-      Object.assign(DB_CACHE, db);
-      return await saveDB(DB_CACHE, retries - 1);
-    }
+    if (res.status === 409) return false; // let the caller re-fetch fresh + reapply, never blind-merge stale over fresh
     if (!res.ok) return false;
     const j = await res.json();
     DB_SHA = j.content.sha;
@@ -409,11 +405,21 @@ async function loadShared(key, fb) {
   const db = await loadDB();
   return (db[key] !== undefined && db[key] !== null) ? db[key] : fb;
 }
-async function saveShared(key, data) {
-  const db = await loadDB();
-  db[key] = data;
-  DB_CACHE = db;
-  return await saveDB(db);
+// Safely save one key into the shared database. Re-fetches fresh data on every
+// attempt before merging in the change, so this can never silently overwrite
+// another device's more recent save — only the one key being set here changes,
+// everything else always reflects whatever is currently on GitHub.
+async function saveShared(key, data, retries) {
+  retries = retries === undefined ? 3 : retries;
+  if (!GH) return false;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    await loadDB(true);
+    const db = DB_CACHE || {};
+    db[key] = data;
+    const ok = await saveDB(db, 0);
+    if (ok) return true;
+  }
+  return false;
 }
 
 // Safely merge one subject's scores into the shared marks list, by learner name,
