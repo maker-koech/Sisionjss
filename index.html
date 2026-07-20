@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="Sision Results" />
 <meta name="mobile-web-app-capable" content="yes" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   html,body,#root{margin:0;padding:0;background:#f4f4f4;}
   *{box-sizing:border-box;}
@@ -2607,6 +2608,28 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
     downloadCSV(rows, `${getStreamLabel(grade,stream).replace(/\s/g,"_")}_MarksTemplate.csv`);
   }
 
+  // Real, openable .xlsx file — a genuinely blank class list (names only,
+  // empty subject columns) regardless of any marks already entered, for
+  // teachers who prefer working in an actual Excel spreadsheet.
+  function handleDownloadBlankExcel() {
+    if (split && viewMode==="combined") {
+      alert("Please open a specific stream (not Combined) to download a class-specific list — each stream is stored separately.");
+      return;
+    }
+    if (typeof XLSX === "undefined") {
+      alert("Excel export isn't available right now — check your internet connection and try again.");
+      return;
+    }
+    const list = getLearnersByStream(stream);
+    const header = ["#", "Name", ...SUBJECTS];
+    const rows = [header, ...list.map((l,i)=>[i+1, l.name, ...SUBJECTS.map(()=>"")])];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{wch:4},{wch:26},...SUBJECTS.map(()=>({wch:10}))];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Blank Class List");
+    XLSX.writeFile(wb, `${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.xlsx`);
+  }
+
   async function handleImportFile(file) {
     if (split && viewMode==="combined") {
       alert("Please open a specific stream (not Combined) before importing — each stream is stored separately.");
@@ -3013,6 +3036,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
               {sortMode==="rank" ? "🔤 Sort A–Z" : "🏆 Sort by Rank"}
             </button>
             <button style={S.ghostBtn} onClick={()=>handleDownload("blank",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_BlankList`)}>⬇ Download Blank Class List</button>
+            <button style={S.ghostBtn} onClick={handleDownloadBlankExcel}>⬇ Excel (Blank Class List)</button>
             <button style={S.ghostBtn} onClick={()=>handlePrint("blank",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_BlankList`)}>🖨 Print Blank Class List</button>
             {hasScores && <button style={S.ghostBtn} onClick={()=>handleDownload("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>⬇ Download Results List</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>🖨 Print Results List</button>}
