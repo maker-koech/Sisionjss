@@ -2614,6 +2614,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
   // empty subject columns) regardless of any marks already entered, for
   // teachers who prefer working in an actual Excel spreadsheet.
   function handleDownloadBlankExcel() {
+    const split = isSplitGrade(grade);
     if (split && viewMode==="combined") {
       alert("Please open a specific stream (not Combined) to download a class-specific list — each stream is stored separately.");
       return;
@@ -2639,11 +2640,13 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
   // Shared helper: the same ranked/filled list used by the CSV export, reused
   // by both the Filled Excel and Filled PDF downloads below.
   function getFilledRows() {
+    const split = isSplitGrade(grade);
     const header = ["#","Name","Stream",...SUBJECTS,"Total","Avg%","Points","Band","Class Rank"];
     if (split) header.push("Grade Rank");
     const list = split
       ? (viewMode==="combined" ? splitCombined.combined : (stream==="East"?splitCombined.east:splitCombined.west))
       : singleRanked;
+    const localMeans = calcSubjectMeans(list);
     const rows = list.map((l,i)=>{
       const og = l.total>0?getGrade(l.avg):null;
       const row = [i+1, l.name, l.stream||grade, ...SUBJECTS.map(s=>l.scores[s]||""),
@@ -2652,12 +2655,13 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
       if (split) row.push(l.overallRank||"");
       return row;
     });
-    const mr = ["","CLASS MEAN","",...SUBJECTS.map(s=>means[s]),"","","","",""];
+    const mr = ["","CLASS MEAN","",...SUBJECTS.map(s=>localMeans[s]),"","","","",""];
     if (split) mr.push("");
     return { header, rows, meanRow: mr };
   }
 
   function handleDownloadFilledExcel() {
+    const split = isSplitGrade(grade);
     if (typeof XLSX === "undefined") {
       alert("Excel export tools didn't load. Check your internet connection, then reload the app and try again.");
       return;
@@ -2682,6 +2686,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
   }
 
   function handleDownloadBlankPDF() {
+    const split = isSplitGrade(grade);
     if (split && viewMode==="combined") {
       alert("Please open a specific stream (not Combined) to download a class-specific list — each stream is stored separately.");
       return;
@@ -2711,6 +2716,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
   }
 
   function handleDownloadFilledPDF() {
+    const split = isSplitGrade(grade);
     const JsPDFClass = getJsPDF();
     if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
     try {
@@ -2732,6 +2738,155 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
       });
       const fname = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
       doc.save(`${fname}_FilledResults.pdf`);
+    } catch (err) {
+      alert("PDF download failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  // Draws one learner's full report card onto the CURRENT page of a jsPDF doc,
+  // mirroring the on-screen ReportCard layout (subjects, summary, pathways, key).
+  function drawReportCardPage(doc, learner, ctx) {
+    const { streamLabel, term, year, classTeacherName, totalInClass, subjectRanks } = ctx;
+    let y = 14;
+    doc.setFontSize(15);
+    doc.setFont(undefined, "bold");
+    doc.text("SISION JUNIOR SCHOOL", 105, y, { align: "center" });
+    doc.setFontSize(9);
+    doc.setFont(undefined, "normal");
+    y += 5;
+    doc.text("Naivasha · Junior Secondary School", 105, y, { align: "center" });
+    y += 5;
+    doc.setFontSize(10);
+    doc.setFont(undefined, "bold");
+    doc.text(`LEARNER'S ${term.toUpperCase()} PROGRESS REPORT — ${year}`, 105, y, { align: "center" });
+    y += 3;
+    doc.setLineWidth(0.6);
+    doc.line(10, y, 200, y);
+    y += 6;
+
+    doc.setFontSize(9);
+    doc.setFont(undefined, "bold");
+    doc.text(`Learner: ${learner.name}`, 12, y);
+    doc.text(`Class: ${streamLabel}`, 90, y);
+    doc.text(`Term: ${term}`, 140, y);
+    y += 5;
+    doc.text(`Class Teacher: ${classTeacherName || "-"}`, 12, y);
+    y += 7;
+
+    const og = learner.total>0 ? getGrade(learner.avg) : null;
+    doc.autoTable({
+      startY: y,
+      head: [["Subject","Score (%)","CBC Level","Points","Grade Rank"]],
+      body: SUBJECTS.map(sub => {
+        const v = learner.scores[sub] || "";
+        const g = v!==""?getGrade(v):null;
+        const rk = subjectRanks && subjectRanks[sub] ? subjectRanks[sub] : "-";
+        return [sub, v, g?g.sub:"-", g?g.points:"-", rk];
+      }),
+      styles: { fontSize: 8.5, cellPadding: 2 },
+      headStyles: { fillColor: [0,0,0] },
+      margin: { left: 12, right: 12 },
+    });
+    y = doc.lastAutoTable.finalY + 4;
+
+    doc.autoTable({
+      startY: y,
+      body: [[
+        `Total: ${learner.total||0}/${SUBJECTS.length*100}`,
+        `Points: ${learner.points||0}/${SUBJECTS.length*8}`,
+        `Average: ${learner.total?learner.avg:0}%`,
+        `Position: ${learner.total?learner.rank:"-"}/${totalInClass}`,
+        `Band: ${og?og.sub:"-"}`
+      ]],
+      styles: { fontSize: 8.5, cellPadding: 3, halign: "center", fontStyle: "bold", lineWidth: 0.4 },
+      margin: { left: 12, right: 12 },
+    });
+    y = doc.lastAutoTable.finalY + 5;
+
+    const pathways = computePathwayScores(learner.scores);
+    const hasAnyScore = SUBJECTS.some(s => learner.scores[s]!==undefined && learner.scores[s]!=="");
+    if (hasAnyScore) {
+      doc.setFontSize(9);
+      doc.setFont(undefined, "bold");
+      doc.text("PATHWAY PERFORMANCE PROFILE", 12, y);
+      y += 2;
+      doc.autoTable({
+        startY: y,
+        head: [["Pathway","Learning Areas Used","Score","Performance"]],
+        body: pathways.map(p => [p.name, p.subjects.join(", "), `${p.score}/${p.outOf}`, `${p.percent}%`]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [0,0,0] },
+        margin: { left: 12, right: 12 },
+      });
+      y = doc.lastAutoTable.finalY + 4;
+      const strongest = pathways.reduce((a,b)=> b.percent > a.percent ? b : a, pathways[0]);
+      const incl = strongest.percent>=70?"strong":strongest.percent>=50?"developing":"emerging";
+      doc.setFontSize(8);
+      doc.setFont(undefined, "normal");
+      const note = `Strongest Pathway: ${strongest.name} (${strongest.percent}%). The learner demonstrates a ${incl} inclination towards the ${strongest.name} pathway based on the areas assessed this term.`;
+      const split_note = doc.splitTextToSize(note, 186);
+      doc.text(split_note, 12, y);
+      y += split_note.length * 4 + 4;
+    }
+
+    doc.autoTable({
+      startY: y,
+      head: [["Code","Range","Pts"]],
+      body: GRADES.map(g => [g.sub, `${g.min}-${g.max}%`, g.points]),
+      styles: { fontSize: 7.5, cellPadding: 1.5 },
+      headStyles: { fillColor: [0,0,0] },
+      margin: { left: 12 },
+      tableWidth: 60,
+    });
+
+    doc.setFontSize(7.5);
+    doc.setFont(undefined, "normal");
+    doc.text(`${term} ${year} · Sision Junior School, Naivasha`, 105, 290, { align: "center" });
+  }
+
+  function handleDownloadReportFormPDF(learner) {
+    const JsPDFClass = getJsPDF();
+    if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
+    try {
+      const doc = new JsPDFClass({ orientation: "portrait" });
+      if (typeof doc.autoTable !== "function") {
+        alert("PDF table tools didn't load. Check your internet connection, then reload the app and try again.");
+        return;
+      }
+      drawReportCardPage(doc, learner, {
+        streamLabel: getStreamLabel(grade, learner.stream||stream),
+        term, year, classTeacherName: classTeacher,
+        totalInClass: filledLearners.length,
+        subjectRanks: subjectRankMap[learner.name]||{},
+      });
+      doc.save(`${learner.name.replace(/\s+/g,"_")}_ReportForm.pdf`);
+    } catch (err) {
+      alert("PDF download failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  function handleDownloadAllReportFormsPDF() {
+    const split = isSplitGrade(grade);
+    const JsPDFClass = getJsPDF();
+    if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
+    if (!filledLearners.length) { alert("No learners with marks entered yet — nothing to generate."); return; }
+    try {
+      const doc = new JsPDFClass({ orientation: "portrait" });
+      if (typeof doc.autoTable !== "function") {
+        alert("PDF table tools didn't load. Check your internet connection, then reload the app and try again.");
+        return;
+      }
+      filledLearners.forEach((learner, i) => {
+        if (i > 0) doc.addPage();
+        drawReportCardPage(doc, learner, {
+          streamLabel: getStreamLabel(grade, learner.stream||stream),
+          term, year, classTeacherName: classTeacher,
+          totalInClass: filledLearners.length,
+          subjectRanks: subjectRankMap[learner.name]||{},
+        });
+      });
+      const lbl = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
+      doc.save(`${lbl}_AllReportForms.pdf`);
     } catch (err) {
       alert("PDF download failed: " + (err && err.message ? err.message : err));
     }
@@ -3142,15 +3297,13 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
             <button style={S.ghostBtn} onClick={()=>setSortMode(sortMode==="rank"?"name":"rank")}>
               {sortMode==="rank" ? "🔤 Sort A–Z" : "🏆 Sort by Rank"}
             </button>
-            <button style={S.ghostBtn} onClick={()=>handleDownload("blank",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_BlankList`)}>⬇ Download Blank Class List</button>
             <button style={S.ghostBtn} onClick={handleDownloadBlankExcel}>⬇ Excel (Blank)</button>
             <button style={S.ghostBtn} onClick={handleDownloadBlankPDF}>⬇ PDF (Blank)</button>
             <button style={S.ghostBtn} onClick={()=>handlePrint("blank",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_BlankList`)}>🖨 Print Blank Class List</button>
             {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledExcel}>⬇ Excel (Filled)</button>}
             {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledPDF}>⬇ PDF (Filled)</button>}
-            {hasScores && <button style={S.ghostBtn} onClick={()=>handleDownload("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>⬇ Download Results List</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>🖨 Print Results List</button>}
-            {hasScores && <button style={S.ghostBtn} onClick={()=>handleDownload("all",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_AllReportForms`)}>⬇ Download All Report Forms</button>}
+            {hasScores && <button style={S.ghostBtn} onClick={handleDownloadAllReportFormsPDF}>⬇ PDF (All Report Forms)</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("all",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_AllReportForms`)}>🖨 Print All Report Forms</button>}
             <button style={S.ghostBtn} onClick={handleDownloadCSV}>⬇ CSV</button>
             <button style={S.ghostBtn} onClick={handleDownloadTemplate}>⬇ Marks Template (CSV)</button>
@@ -3246,7 +3399,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
                     <td style={{...S.tdC,fontWeight:700,fontSize:10,borderRight:"1px solid #e0e0e0"}}>{og?og.sub:"–"}</td>
                     <td style={{...S.tdC,whiteSpace:"nowrap"}}>
                       <button style={S.actionBtn} title="Edit" onClick={()=>setEditingLearner({...l,stream:l.stream||stream})}>✏️</button>
-                      {l.total>0&&<button style={S.actionBtn} title="Download report form" onClick={()=>handleDownload(l,`${l.name.replace(/\s+/g,"_")}_ReportForm`)}>⬇</button>}
+                      {l.total>0&&<button style={S.actionBtn} title="Download report form (PDF)" onClick={()=>handleDownloadReportFormPDF(l)}>⬇</button>}
                       {l.total>0&&<button style={S.actionBtn} title="Print report form" onClick={()=>handlePrint(l,`${l.name.replace(/\s+/g,"_")}_ReportForm`)}>🖨</button>}
                       <button style={S.actionBtn} title="Remove" onClick={()=>handleDeleteLearner(l.name,l.stream||stream)}>🗑️</button>
                     </td>
