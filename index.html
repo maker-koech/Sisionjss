@@ -12,9 +12,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="Sision Results" />
 <meta name="mobile-web-app-capable" content="yes" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
   html,body,#root{margin:0;padding:0;background:#f4f4f4;}
   *{box-sizing:border-box;}
@@ -2619,17 +2619,21 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
       return;
     }
     if (typeof XLSX === "undefined") {
-      alert("Excel export isn't available right now — check your internet connection and try again.");
+      alert("Excel export tools didn't load. Check your internet connection, then reload the app and try again.");
       return;
     }
-    const list = getLearnersByStream(stream);
-    const header = ["#", "Name", ...SUBJECTS];
-    const rows = [header, ...list.map((l,i)=>[i+1, l.name, ...SUBJECTS.map(()=>"")])];
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{wch:4},{wch:26},...SUBJECTS.map(()=>({wch:10}))];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Blank Class List");
-    XLSX.writeFile(wb, `${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.xlsx`);
+    try {
+      const list = getLearnersByStream(stream);
+      const header = ["#", "Name", ...SUBJECTS];
+      const rows = [header, ...list.map((l,i)=>[i+1, l.name, ...SUBJECTS.map(()=>"")])];
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = [{wch:4},{wch:26},...SUBJECTS.map(()=>({wch:10}))];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Blank Class List");
+      XLSX.writeFile(wb, `${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.xlsx`);
+    } catch (err) {
+      alert("Excel download failed: " + (err && err.message ? err.message : err));
+    }
   }
 
   // Shared helper: the same ranked/filled list used by the CSV export, reused
@@ -2655,17 +2659,21 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
 
   function handleDownloadFilledExcel() {
     if (typeof XLSX === "undefined") {
-      alert("Excel export isn't available right now — check your internet connection and try again.");
+      alert("Excel export tools didn't load. Check your internet connection, then reload the app and try again.");
       return;
     }
-    const { header, rows, meanRow } = getFilledRows();
-    const sheetRows = [header, ...rows, meanRow];
-    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
-    ws["!cols"] = [{wch:4},{wch:26},{wch:8},...SUBJECTS.map(()=>({wch:8})),{wch:8},{wch:8},{wch:8},{wch:8},{wch:9}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Filled Results");
-    const lbl = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
-    XLSX.writeFile(wb, `${lbl}_FilledResults.xlsx`);
+    try {
+      const { header, rows, meanRow } = getFilledRows();
+      const sheetRows = [header, ...rows, meanRow];
+      const ws = XLSX.utils.aoa_to_sheet(sheetRows);
+      ws["!cols"] = [{wch:4},{wch:26},{wch:8},...SUBJECTS.map(()=>({wch:8})),{wch:8},{wch:8},{wch:8},{wch:8},{wch:9}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Filled Results");
+      const lbl = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
+      XLSX.writeFile(wb, `${lbl}_FilledResults.xlsx`);
+    } catch (err) {
+      alert("Excel download failed: " + (err && err.message ? err.message : err));
+    }
   }
 
   function getJsPDF() {
@@ -2679,38 +2687,54 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
       return;
     }
     const JsPDFClass = getJsPDF();
-    if (!JsPDFClass) { alert("PDF export isn't available right now — check your internet connection and try again."); return; }
-    const list = getLearnersByStream(stream);
-    const doc = new JsPDFClass({ orientation: "landscape" });
-    doc.setFontSize(13);
-    doc.text(`${getStreamLabel(grade,stream)} — Blank Class List`, 14, 12);
-    doc.autoTable({
-      startY: 18,
-      head: [["#","Name",...SUBJECTS]],
-      body: list.map((l,i)=>[i+1, l.name, ...SUBJECTS.map(()=>"")]),
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [0,0,0] },
-    });
-    doc.save(`${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.pdf`);
+    if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
+    try {
+      const list = getLearnersByStream(stream);
+      const doc = new JsPDFClass({ orientation: "landscape" });
+      if (typeof doc.autoTable !== "function") {
+        alert("PDF table tools didn't load. Check your internet connection, then reload the app and try again.");
+        return;
+      }
+      doc.setFontSize(13);
+      doc.text(`${getStreamLabel(grade,stream)} — Blank Class List`, 14, 12);
+      doc.autoTable({
+        startY: 18,
+        head: [["#","Name",...SUBJECTS]],
+        body: list.map((l,i)=>[i+1, l.name, ...SUBJECTS.map(()=>"")]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [0,0,0] },
+      });
+      doc.save(`${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.pdf`);
+    } catch (err) {
+      alert("PDF download failed: " + (err && err.message ? err.message : err));
+    }
   }
 
   function handleDownloadFilledPDF() {
     const JsPDFClass = getJsPDF();
-    if (!JsPDFClass) { alert("PDF export isn't available right now — check your internet connection and try again."); return; }
-    const { header, rows, meanRow } = getFilledRows();
-    const doc = new JsPDFClass({ orientation: "landscape" });
-    doc.setFontSize(13);
-    const lbl = split&&viewMode==="combined" ? `Grade ${grade} (Combined)` : getStreamLabel(grade,stream);
-    doc.text(`${lbl} — Filled Results`, 14, 12);
-    doc.autoTable({
-      startY: 18,
-      head: [header],
-      body: [...rows, meanRow],
-      styles: { fontSize: 7, cellPadding: 1.5 },
-      headStyles: { fillColor: [0,0,0] },
-    });
-    const fname = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
-    doc.save(`${fname}_FilledResults.pdf`);
+    if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
+    try {
+      const { header, rows, meanRow } = getFilledRows();
+      const doc = new JsPDFClass({ orientation: "landscape" });
+      if (typeof doc.autoTable !== "function") {
+        alert("PDF table tools didn't load. Check your internet connection, then reload the app and try again.");
+        return;
+      }
+      doc.setFontSize(13);
+      const lbl = split&&viewMode==="combined" ? `Grade ${grade} (Combined)` : getStreamLabel(grade,stream);
+      doc.text(`${lbl} — Filled Results`, 14, 12);
+      doc.autoTable({
+        startY: 18,
+        head: [header],
+        body: [...rows, meanRow],
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [0,0,0] },
+      });
+      const fname = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
+      doc.save(`${fname}_FilledResults.pdf`);
+    } catch (err) {
+      alert("PDF download failed: " + (err && err.message ? err.message : err));
+    }
   }
 
   async function handleImportFile(file) {
