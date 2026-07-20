@@ -13,6 +13,8 @@
 <meta name="apple-mobile-web-app-title" content="Sision Results" />
 <meta name="mobile-web-app-capable" content="yes" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   html,body,#root{margin:0;padding:0;background:#f4f4f4;}
   *{box-sizing:border-box;}
@@ -2630,6 +2632,87 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
     XLSX.writeFile(wb, `${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.xlsx`);
   }
 
+  // Shared helper: the same ranked/filled list used by the CSV export, reused
+  // by both the Filled Excel and Filled PDF downloads below.
+  function getFilledRows() {
+    const header = ["#","Name","Stream",...SUBJECTS,"Total","Avg%","Points","Band","Class Rank"];
+    if (split) header.push("Grade Rank");
+    const list = split
+      ? (viewMode==="combined" ? splitCombined.combined : (stream==="East"?splitCombined.east:splitCombined.west))
+      : singleRanked;
+    const rows = list.map((l,i)=>{
+      const og = l.total>0?getGrade(l.avg):null;
+      const row = [i+1, l.name, l.stream||grade, ...SUBJECTS.map(s=>l.scores[s]||""),
+        l.total||"", l.total?l.avg:"", l.total?l.points:"",
+        og?og.sub:"", l.total?l.rank:""];
+      if (split) row.push(l.overallRank||"");
+      return row;
+    });
+    const mr = ["","CLASS MEAN","",...SUBJECTS.map(s=>means[s]),"","","","",""];
+    if (split) mr.push("");
+    return { header, rows, meanRow: mr };
+  }
+
+  function handleDownloadFilledExcel() {
+    if (typeof XLSX === "undefined") {
+      alert("Excel export isn't available right now — check your internet connection and try again.");
+      return;
+    }
+    const { header, rows, meanRow } = getFilledRows();
+    const sheetRows = [header, ...rows, meanRow];
+    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
+    ws["!cols"] = [{wch:4},{wch:26},{wch:8},...SUBJECTS.map(()=>({wch:8})),{wch:8},{wch:8},{wch:8},{wch:8},{wch:9}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Filled Results");
+    const lbl = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
+    XLSX.writeFile(wb, `${lbl}_FilledResults.xlsx`);
+  }
+
+  function getJsPDF() {
+    if (typeof window.jspdf === "undefined" || typeof window.jspdf.jsPDF === "undefined") return null;
+    return window.jspdf.jsPDF;
+  }
+
+  function handleDownloadBlankPDF() {
+    if (split && viewMode==="combined") {
+      alert("Please open a specific stream (not Combined) to download a class-specific list — each stream is stored separately.");
+      return;
+    }
+    const JsPDFClass = getJsPDF();
+    if (!JsPDFClass) { alert("PDF export isn't available right now — check your internet connection and try again."); return; }
+    const list = getLearnersByStream(stream);
+    const doc = new JsPDFClass({ orientation: "landscape" });
+    doc.setFontSize(13);
+    doc.text(`${getStreamLabel(grade,stream)} — Blank Class List`, 14, 12);
+    doc.autoTable({
+      startY: 18,
+      head: [["#","Name",...SUBJECTS]],
+      body: list.map((l,i)=>[i+1, l.name, ...SUBJECTS.map(()=>"")]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [0,0,0] },
+    });
+    doc.save(`${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.pdf`);
+  }
+
+  function handleDownloadFilledPDF() {
+    const JsPDFClass = getJsPDF();
+    if (!JsPDFClass) { alert("PDF export isn't available right now — check your internet connection and try again."); return; }
+    const { header, rows, meanRow } = getFilledRows();
+    const doc = new JsPDFClass({ orientation: "landscape" });
+    doc.setFontSize(13);
+    const lbl = split&&viewMode==="combined" ? `Grade ${grade} (Combined)` : getStreamLabel(grade,stream);
+    doc.text(`${lbl} — Filled Results`, 14, 12);
+    doc.autoTable({
+      startY: 18,
+      head: [header],
+      body: [...rows, meanRow],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [0,0,0] },
+    });
+    const fname = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
+    doc.save(`${fname}_FilledResults.pdf`);
+  }
+
   async function handleImportFile(file) {
     if (split && viewMode==="combined") {
       alert("Please open a specific stream (not Combined) before importing — each stream is stored separately.");
@@ -3036,8 +3119,11 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
               {sortMode==="rank" ? "🔤 Sort A–Z" : "🏆 Sort by Rank"}
             </button>
             <button style={S.ghostBtn} onClick={()=>handleDownload("blank",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_BlankList`)}>⬇ Download Blank Class List</button>
-            <button style={S.ghostBtn} onClick={handleDownloadBlankExcel}>⬇ Excel (Blank Class List)</button>
+            <button style={S.ghostBtn} onClick={handleDownloadBlankExcel}>⬇ Excel (Blank)</button>
+            <button style={S.ghostBtn} onClick={handleDownloadBlankPDF}>⬇ PDF (Blank)</button>
             <button style={S.ghostBtn} onClick={()=>handlePrint("blank",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_BlankList`)}>🖨 Print Blank Class List</button>
+            {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledExcel}>⬇ Excel (Filled)</button>}
+            {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledPDF}>⬇ PDF (Filled)</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handleDownload("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>⬇ Download Results List</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>🖨 Print Results List</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handleDownload("all",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_AllReportForms`)}>⬇ Download All Report Forms</button>}
