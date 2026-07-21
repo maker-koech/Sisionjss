@@ -452,6 +452,50 @@ async function saveSubjectScores(key, subject, updatesByName, rosterNames, retri
   }
   return false;
 }
+
+// Merges a class teacher's on-screen marks with whatever is currently on
+// GitHub, field-by-field, so a Save can never wipe out a subject teacher's
+// (or anyone else's) more recent upload for a subject the class teacher
+// didn't actually touch this session.
+//   - baselineMap[learnerName][subject] = the score as it stood when this
+//     class was last opened/saved — used to detect what was truly edited.
+//   - Any subject whose on-screen value still matches its baseline is treated
+//     as "untouched" and takes the fresh remote value instead.
+//   - Any subject that differs from baseline (a real edit, or a brand new
+//     learner) keeps the on-screen value.
+function mergeScoresForSave(localList, freshList, baselineMap) {
+  const freshByName = {};
+  (freshList || []).forEach(l => { freshByName[l.name] = l.scores || {}; });
+  return localList.map(local => {
+    const fresh = freshByName[local.name] || {};
+    const baseline = (baselineMap && baselineMap[local.name]) || {};
+    const merged = {};
+    SUBJECTS.forEach(sub => {
+      const localVal = local.scores ? local.scores[sub] : undefined;
+      const baselineVal = baseline[sub];
+      const freshVal = fresh[sub];
+      const editedThisSession = String(localVal ?? "") !== String(baselineVal ?? "");
+      merged[sub] = editedThisSession ? (localVal ?? "") : (freshVal !== undefined ? freshVal : (localVal ?? ""));
+    });
+    return { name: local.name, scores: merged };
+  });
+}
+
+async function saveScoresSafely(key, localList, baselineMap, retries) {
+  retries = retries === undefined ? 3 : retries;
+  if (!GH) return { ok: false, merged: null };
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    await loadDB(true);
+    const db = DB_CACHE || {};
+    const freshList = db[key] || [];
+    const merged = mergeScoresForSave(localList, freshList, baselineMap);
+    db[key] = merged;
+    const ok = await saveDB(db, 0);
+    if (ok) return { ok: true, merged };
+  }
+  return { ok: false, merged: null };
+}
+
 async function listSharedKeys(prefix) {
   const db = await loadDB();
   return Object.keys(db).filter(k => k.startsWith(prefix));
@@ -2052,6 +2096,15 @@ function App() {
     setUserSession(null);
   }
   const isAdmin = !!userSession && userSession.role === "admin";
+  // Snapshot of each learner's scores as last fetched/saved from GitHub — used
+  // to tell "genuinely edited this session" apart from "just untouched local
+  // state" when saving, so Save can never wipe out someone else's newer work.
+  const baselineRef = useRef({});
+  function captureBaseline(list) {
+    const snap = {};
+    (list || []).forEach(l => { snap[l.name] = { ...(l.scores || {}) }; });
+    return snap;
+  }
 
   const [showSetup, setShowSetup] = useState(!GH);
   const [showTeacherAdmin, setShowTeacherAdmin] = useState(false);
@@ -2445,6 +2498,7 @@ function App() {
         setLearnersEast(e);
         setLearnersWest(w);
         setLearnersSingle([]);
+        baselineRef.current = { ...captureBaseline(e), ...captureBaseline(w) };
         if (!stream || (stream!=="East"&&stream!=="West")) setStream("East");
       } else {
         let s = await loadOneLearnersList(grade, "");
@@ -2452,6 +2506,7 @@ function App() {
         setLearnersSingle(s);
         setLearnersEast([]);
         setLearnersWest([]);
+        baselineRef.current = captureBaseline(s);
       }
       setPage("results");
       setSaved(false);
@@ -2471,13 +2526,27 @@ function App() {
       const split = isSplitGrade(grade);
       let ok = true;
       if (split) {
-        ok = await saveShared(learnersKey(grade,"East"), learnersEast.map(l=>({name:l.name,scores:l.scores}))) && ok;
-        ok = await saveShared(learnersKey(grade,"West"), learnersWest.map(l=>({name:l.name,scores:l.scores}))) && ok;
-        ok = await saveShared(storageKey(grade,"East",term,year), learnersEast.map(l=>({name:l.name,scores:l.scores}))) && ok;
-        ok = await saveShared(storageKey(grade,"West",term,year), learnersWest.map(l=>({name:l.name,scores:l.scores}))) && ok;
+        const eastLocal = learnersEast.map(l=>({name:l.name,scores:l.scores}));
+        const westLocal = learnersWest.map(l=>({name:l.name,scores:l.scores}));
+        ok = await saveShared(learnersKey(grade,"East"), eastLocal.map(l=>({name:l.name}))) && ok;
+        ok = await saveShared(learnersKey(grade,"West"), westLocal.map(l=>({name:l.name}))) && ok;
+        const eastResult = await saveScoresSafely(storageKey(grade,"East",term,year), eastLocal, baselineRef.current);
+        const westResult = await saveScoresSafely(storageKey(grade,"West",term,year), westLocal, baselineRef.current);
+        ok = ok && eastResult.ok && westResult.ok;
+        if (eastResult.ok && westResult.ok) {
+          setLearnersEast(prev => prev.map(l => { const m = eastResult.merged.find(x=>x.name===l.name); return m ? {...l, scores:m.scores} : l; }));
+          setLearnersWest(prev => prev.map(l => { const m = westResult.merged.find(x=>x.name===l.name); return m ? {...l, scores:m.scores} : l; }));
+          baselineRef.current = { ...captureBaseline(eastResult.merged), ...captureBaseline(westResult.merged) };
+        }
       } else {
-        ok = await saveShared(learnersKey(grade,""), learnersSingle.map(l=>({name:l.name,scores:l.scores}))) && ok;
-        ok = await saveShared(storageKey(grade,"",term,year), learnersSingle.map(l=>({name:l.name,scores:l.scores}))) && ok;
+        const singleLocal = learnersSingle.map(l=>({name:l.name,scores:l.scores}));
+        ok = await saveShared(learnersKey(grade,""), singleLocal.map(l=>({name:l.name}))) && ok;
+        const result = await saveScoresSafely(storageKey(grade,"",term,year), singleLocal, baselineRef.current);
+        ok = ok && result.ok;
+        if (result.ok) {
+          setLearnersSingle(prev => prev.map(l => { const m = result.merged.find(x=>x.name===l.name); return m ? {...l, scores:m.scores} : l; }));
+          baselineRef.current = captureBaseline(result.merged);
+        }
       }
       if (ok) {
         setSaved(true); setDirty(false); setTimeout(()=>setSaved(false), 2500);
