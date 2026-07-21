@@ -2198,6 +2198,7 @@ function App() {
   const [subjectSaving, setSubjectSaving]   = useState(false);
   const [subjectSaved, setSubjectSaved]     = useState(false);
   const [subjectNotConnected, setSubjectNotConnected] = useState(false);
+  const [subjectHasExistingRecord, setSubjectHasExistingRecord] = useState(true);
 
   function proceedAfterLogin(entry) {
     if (entry.classes.length === 1) {
@@ -2226,6 +2227,7 @@ function App() {
       await loadDB(true); // always fetch fresh so a class teacher's recent save shows up
       const roster = (await loadShared(learnersKey(subjectClass.grade, subjectClass.stream), [])) || [];
       const scoresArr = await loadShared(storageKey(subjectClass.grade, subjectClass.stream, subjectTerm, subjectYear), null);
+      setSubjectHasExistingRecord(!!(scoresArr && scoresArr.length));
       const scoreMap = {};
       if (scoresArr) scoresArr.forEach(l => { scoreMap[l.name] = (l.scores && l.scores[subjectChoice]) || ""; });
       const list = roster.map(l => ({ name: l.name, score: scoreMap[l.name] || "" }));
@@ -2241,10 +2243,24 @@ function App() {
     if (!GH) { alert("Not connected to GitHub. Ask the admin to connect this device first."); return; }
     setSubjectSaving(true);
     try {
+      const key = storageKey(subjectClass.grade, subjectClass.stream, subjectTerm, subjectYear);
+      // Safety check: if there's genuinely no existing record yet for this exact
+      // Term + Year + Class, warn before creating a fresh (blank-for-other-subjects)
+      // one — this is almost always a sign the Term/Year dropdown doesn't match
+      // what the class teacher used, not an intentional first-time entry.
+      await loadDB(true);
+      const existing = DB_CACHE && DB_CACHE[key];
+      if (!existing || !existing.length) {
+        const proceed = window.confirm(
+          `No existing results found for ${subjectClass.grade==="8"?`Grade 8 ${subjectClass.stream}`:`Grade ${subjectClass.grade}`} under "${subjectTerm} ${subjectYear}".\n\n` +
+          `If other subjects already have marks entered for this class and term, this usually means the Term or Year selected above doesn't match — double-check them before continuing.\n\n` +
+          `If this really is the first upload for this class/term, tap OK to continue.`
+        );
+        if (!proceed) { setSubjectSaving(false); return; }
+      }
       const updates = {};
       subjectList.forEach(row => { updates[row.name] = row.score; });
       const rosterNames = subjectList.map(row => row.name);
-      const key = storageKey(subjectClass.grade, subjectClass.stream, subjectTerm, subjectYear);
       const ok = await saveSubjectScores(key, subjectChoice, updates, rosterNames);
       if (ok) {
         setSubjectSaved(true);
@@ -3298,6 +3314,15 @@ function renderNodeToPdfPage(doc, node) {
           </div>
         ) : (
           <div style={{padding:"0 12px 40px"}}>
+            {subjectHasExistingRecord ? (
+              <div style={{background:"#e8f5e9",border:"1px solid #86c98f",borderRadius:6,padding:"6px 10px",fontSize:11.5,marginBottom:8,color:"#1e5c26"}}>
+                ✓ Existing results found for this class under "{subjectTerm} {subjectYear}" — your upload will merge into them, other subjects stay untouched.
+              </div>
+            ) : (
+              <div style={{background:"#fff4e5",border:"1px solid #e0a030",borderRadius:6,padding:"6px 10px",fontSize:11.5,marginBottom:8,color:"#7a4a00"}}>
+                ⚠ No existing results found for this class under "{subjectTerm} {subjectYear}". If other subjects should already have marks here, double-check the Term/Year above match what the class teacher used.
+              </div>
+            )}
             <table style={{width:"100%",borderCollapse:"collapse",marginTop:10}}>
               <thead>
                 <tr style={{borderBottom:"2px solid #000"}}>
