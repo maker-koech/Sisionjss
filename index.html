@@ -2055,6 +2055,7 @@ function App() {
 
   const [showSetup, setShowSetup] = useState(!GH);
   const [showTeacherAdmin, setShowTeacherAdmin] = useState(false);
+  const [generatingAllPDF, setGeneratingAllPDF] = useState(false);
 
   const [page, setPage]           = useState("home");
   const [grade, setGrade]         = useState(GRADE_LOCK || "8");
@@ -2746,6 +2747,42 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
 
   // Draws one learner's full report card onto the CURRENT page of a jsPDF doc,
   // mirroring the on-screen ReportCard layout (subjects, summary, pathways, key).
+    // Renders one already-on-screen report card DOM node into the current PDF
+// page, pixel-matching exactly what "Print" produces (same node, same CSS).
+function renderNodeToPdfPage(doc, node) {
+    return new Promise((resolve, reject) => {
+      try {
+        doc.html(node, {
+          callback: () => resolve(),
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+          width: 595,                       // A4 width in pt
+          windowWidth: node.scrollWidth || 900,
+          x: 0, y: 0,
+        });
+      } catch (err) { reject(err); }
+    });
+  }
+
+  // Single-learner download: exact match to Print (one page only — fast and safe).
+  async function handleDownloadReportFormPDF(learner) {
+    const JsPDFClass = getJsPDF();
+    if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
+    if (typeof html2canvas === "undefined") { alert("PDF rendering tools didn't load. Check your internet connection, then reload the app and try again."); return; }
+    const node = findPrintNode(learner);
+    if (!node) { alert("That report isn't ready yet — make sure marks have been entered, then try again."); return; }
+    try {
+      const doc = new JsPDFClass({ unit: "pt", format: "a4" });
+      await renderNodeToPdfPage(doc, node);
+      doc.save(`${learner.name.replace(/\s+/g,"_")}_ReportForm.pdf`);
+    } catch (err) {
+      alert("PDF download failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  // Draws one learner's full report card onto the CURRENT page of a jsPDF doc
+  // using fast vector drawing (no screenshotting) — safe for a whole class of
+  // 50+ learners without freezing the browser. Layout mirrors the on-screen
+  // report card: subjects table, summary, pathway profile, grading key.
   function drawReportCardPage(doc, learner, ctx) {
     const { streamLabel, term, year, classTeacherName, totalInClass, subjectRanks } = ctx;
     let y = 14;
@@ -2825,9 +2862,9 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
       doc.setFontSize(8);
       doc.setFont(undefined, "normal");
       const note = `Strongest Pathway: ${strongest.name} (${strongest.percent}%). The learner demonstrates a ${incl} inclination towards the ${strongest.name} pathway based on the areas assessed this term.`;
-      const split_note = doc.splitTextToSize(note, 186);
-      doc.text(split_note, 12, y);
-      y += split_note.length * 4 + 4;
+      const splitNote = doc.splitTextToSize(note, 186);
+      doc.text(splitNote, 12, y);
+      y += splitNote.length * 4 + 4;
     }
 
     doc.autoTable({
@@ -2845,55 +2882,38 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
     doc.text(`${term} ${year} · Sision Junior School, Naivasha`, 105, 290, { align: "center" });
   }
 
-  // Renders one already-on-screen report card DOM node into the current PDF
-// page, pixel-matching exactly what "Print" produces (same node, same CSS).
-function renderNodeToPdfPage(doc, node) {
-    return new Promise((resolve, reject) => {
-      try {
-        doc.html(node, {
-          callback: () => resolve(),
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-          width: 595,                       // A4 width in pt
-          windowWidth: node.scrollWidth || 900,
-          x: 0, y: 0,
-        });
-      } catch (err) { reject(err); }
-    });
-  }
-
-  async function handleDownloadReportFormPDF(learner) {
-    const JsPDFClass = getJsPDF();
-    if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
-    if (typeof html2canvas === "undefined") { alert("PDF rendering tools didn't load. Check your internet connection, then reload the app and try again."); return; }
-    const node = findPrintNode(learner);
-    if (!node) { alert("That report isn't ready yet — make sure marks have been entered, then try again."); return; }
-    try {
-      const doc = new JsPDFClass({ unit: "pt", format: "a4" });
-      await renderNodeToPdfPage(doc, node);
-      doc.save(`${learner.name.replace(/\s+/g,"_")}_ReportForm.pdf`);
-    } catch (err) {
-      alert("PDF download failed: " + (err && err.message ? err.message : err));
-    }
-  }
-
+  // All-report-forms download: fast vector drawing, one page per learner.
+  // Deliberately does NOT screenshot each page (that freezes the browser for
+  // a full class of 50+ learners) — this generates in roughly a second or two
+  // even for a large class.
   async function handleDownloadAllReportFormsPDF() {
     const split = isSplitGrade(grade);
     const JsPDFClass = getJsPDF();
     if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
-    if (typeof html2canvas === "undefined") { alert("PDF rendering tools didn't load. Check your internet connection, then reload the app and try again."); return; }
-    const container = findPrintNode("all");
-    const children = container ? Array.from(container.children) : [];
-    if (!children.length) { alert("No learners with marks entered yet — nothing to generate."); return; }
+    if (!filledLearners.length) { alert("No learners with marks entered yet — nothing to generate."); return; }
+    setGeneratingAllPDF(true);
     try {
-      const doc = new JsPDFClass({ unit: "pt", format: "a4" });
-      for (let i = 0; i < children.length; i++) {
-        if (i > 0) doc.addPage();
-        await renderNodeToPdfPage(doc, children[i]);
+      await new Promise(r => setTimeout(r, 30)); // let the UI repaint to "Generating…" before the main-thread work starts
+      const doc = new JsPDFClass({ orientation: "portrait" });
+      if (typeof doc.autoTable !== "function") {
+        alert("PDF table tools didn't load. Check your internet connection, then reload the app and try again.");
+        return;
       }
+      filledLearners.forEach((learner, i) => {
+        if (i > 0) doc.addPage();
+        drawReportCardPage(doc, learner, {
+          streamLabel: getStreamLabel(grade, learner.stream||stream),
+          term, year, classTeacherName: classTeacher,
+          totalInClass: filledLearners.length,
+          subjectRanks: subjectRankMap[learner.name]||{},
+        });
+      });
       const lbl = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
       doc.save(`${lbl}_AllReportForms.pdf`);
     } catch (err) {
       alert("PDF download failed: " + (err && err.message ? err.message : err));
+    } finally {
+      setGeneratingAllPDF(false);
     }
   }
 
@@ -3308,7 +3328,7 @@ function renderNodeToPdfPage(doc, node) {
             {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledExcel}>⬇ Excel (Filled)</button>}
             {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledPDF}>⬇ PDF (Filled)</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>🖨 Print Results List</button>}
-            {hasScores && <button style={S.ghostBtn} onClick={handleDownloadAllReportFormsPDF}>⬇ PDF (All Report Forms)</button>}
+            {hasScores && <button style={S.ghostBtn} onClick={handleDownloadAllReportFormsPDF} disabled={generatingAllPDF}>{generatingAllPDF?"⏳ Generating…":"⬇ PDF (All Report Forms)"}</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("all",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_AllReportForms`)}>🖨 Print All Report Forms</button>}
             <button style={S.ghostBtn} onClick={handleDownloadCSV}>⬇ CSV</button>
             <button style={S.ghostBtn} onClick={handleDownloadTemplate}>⬇ Marks Template (CSV)</button>
