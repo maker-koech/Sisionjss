@@ -3396,8 +3396,8 @@ function renderNodeToPdfPage(doc, node) {
               {filteredDisplay.map((l,i)=>{
                 const og=l.total>0?getGrade(l.avg):null;
                 return (
-                  <tr key={i} style={{background:i%2===0?"#fff":"#fafafa",borderBottom:"1px solid #e0e0e0"}}>
-                    <td style={{...S.tdC,borderRight:"1px solid #e0e0e0"}}>
+                  <tr key={i} style={{background:i%2===0?"#fff":"#f4f6f8",borderBottom:"1px solid #999"}}>
+                    <td style={{...S.tdC,borderRight:"1px solid #999"}}>
                       <span style={S.rankBadge}>{l.rank}</span>
                     </td>
                     {split && (
