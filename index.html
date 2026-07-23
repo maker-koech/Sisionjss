@@ -2830,6 +2830,83 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
     }
   }
 
+  // Counts, per subject, how many learners fall into each CBC grade band
+  // (EE1 through BE2) for the currently open class/term/year. Used by the
+  // Grade Distribution Analysis PDF below.
+  function computeGradeDistribution(list) {
+    const dist = {};
+    SUBJECTS.forEach(sub => {
+      dist[sub] = {};
+      GRADES.forEach(g => { dist[sub][g.sub] = 0; });
+      dist[sub]._entered = 0;
+    });
+    const overall = {};
+    GRADES.forEach(g => { overall[g.sub] = 0; });
+    let overallEntered = 0;
+    list.forEach(l => {
+      SUBJECTS.forEach(sub => {
+        const v = l.scores ? l.scores[sub] : undefined;
+        if (v !== undefined && v !== "" && v !== null) {
+          const g = getGrade(v);
+          if (g) { dist[sub][g.sub]++; dist[sub]._entered++; }
+        }
+      });
+      if (l.total > 0) {
+        const og = getGrade(l.avg);
+        if (og) { overall[og.sub]++; overallEntered++; }
+      }
+    });
+    return { dist, overall, overallEntered };
+  }
+
+  function handleDownloadGradeDistributionPDF() {
+    const split = isSplitGrade(grade);
+    const JsPDFClass = getJsPDF();
+    if (!JsPDFClass) { alert("PDF export tools didn't load. Check your internet connection, then reload the app and try again."); return; }
+    try {
+      const list = split
+        ? (viewMode==="combined" ? splitCombined.combined : (stream==="East"?splitCombined.east:splitCombined.west))
+        : singleRanked;
+      const { dist, overall, overallEntered } = computeGradeDistribution(list);
+      const doc = new JsPDFClass({ orientation: "landscape" });
+      if (typeof doc.autoTable !== "function") {
+        alert("PDF table tools didn't load. Check your internet connection, then reload the app and try again.");
+        return;
+      }
+      const lbl = split&&viewMode==="combined" ? `Grade ${grade} (Combined)` : getStreamLabel(grade,stream);
+      doc.setFontSize(13);
+      doc.text(`${lbl} — Grade Distribution Analysis — ${term} ${year}`, 14, 12);
+      const head = [["Subject", ...GRADES.map(g=>g.sub), "Entered"]];
+      const body = SUBJECTS.map(sub => [
+        sub,
+        ...GRADES.map(g => dist[sub][g.sub] || 0),
+        dist[sub]._entered
+      ]);
+      body.push([
+        "OVERALL (Average)",
+        ...GRADES.map(g => overall[g.sub] || 0),
+        overallEntered
+      ]);
+      doc.autoTable({
+        startY: 18,
+        head, body,
+        styles: { fontSize: 9, cellPadding: 3, halign: "center" },
+        columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
+        headStyles: { fillColor: [0,0,0] },
+        didParseCell: (data) => {
+          if (data.row.index === body.length - 1) {
+            data.cell.styles.fillColor = [230,230,230];
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+      const fname2 = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
+      doc.save(`${fname2}_GradeDistribution.pdf`);
+    } catch (err) {
+      alert("PDF download failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
   // Draws one learner's full report card onto the CURRENT page of a jsPDF doc,
   // mirroring the on-screen ReportCard layout (subjects, summary, pathways, key).
     // Renders one already-on-screen report card DOM node into the current PDF
@@ -3421,6 +3498,7 @@ function renderNodeToPdfPage(doc, node) {
             <button style={S.ghostBtn} onClick={()=>handlePrint("blank",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_BlankList`)}>🖨 Print Blank Class List</button>
             {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledExcel}>⬇ Excel (Filled)</button>}
             {hasScores && <button style={S.ghostBtn} onClick={handleDownloadFilledPDF}>⬇ PDF (Filled)</button>}
+            {hasScores && <button style={S.ghostBtn} onClick={handleDownloadGradeDistributionPDF}>⬇ PDF (Grade Distribution)</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("filled",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_ResultsList`)}>🖨 Print Results List</button>}
             {hasScores && <button style={S.ghostBtn} onClick={handleDownloadAllReportFormsPDF} disabled={generatingAllPDF}>{generatingAllPDF?"⏳ Generating…":"⬇ PDF (All Report Forms)"}</button>}
             {hasScores && <button style={S.ghostBtn} onClick={()=>handlePrint("all",`Grade${grade}${viewMode==="combined"?"_Combined":"_"+stream}_AllReportForms`)}>🖨 Print All Report Forms</button>}
