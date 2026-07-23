@@ -2868,6 +2868,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
         ? (viewMode==="combined" ? splitCombined.combined : (stream==="East"?splitCombined.east:splitCombined.west))
         : singleRanked;
       const { dist, overall, overallEntered } = computeGradeDistribution(list);
+      const subjectMeans = calcSubjectMeans(list);
       const doc = new JsPDFClass({ orientation: "landscape" });
       if (typeof doc.autoTable !== "function") {
         alert("PDF table tools didn't load. Check your internet connection, then reload the app and try again.");
@@ -2876,21 +2877,30 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
       const lbl = split&&viewMode==="combined" ? `Grade ${grade} (Combined)` : getStreamLabel(grade,stream);
       doc.setFontSize(13);
       doc.text(`${lbl} — Grade Distribution Analysis — ${term} ${year}`, 14, 12);
-      const head = [["Subject", ...GRADES.map(g=>g.sub), "Entered"]];
-      const body = SUBJECTS.map(sub => [
-        sub,
-        ...GRADES.map(g => dist[sub][g.sub] || 0),
-        dist[sub]._entered
-      ]);
+      const head = [["Subject", ...GRADES.map(g=>g.sub), "Entered", "Mean", "Mean Band"]];
+      const body = SUBJECTS.map(sub => {
+        const meanVal = subjectMeans[sub];
+        const meanBand = meanVal !== "–" ? getGrade(meanVal) : null;
+        return [
+          sub,
+          ...GRADES.map(g => dist[sub][g.sub] || 0),
+          dist[sub]._entered,
+          meanVal,
+          meanBand ? meanBand.sub : "–"
+        ];
+      });
+      const overallMeanBand = subjectMeans["_classMean"] !== "–" ? getGrade(subjectMeans["_classMean"]) : null;
       body.push([
         "OVERALL (Average)",
         ...GRADES.map(g => overall[g.sub] || 0),
-        overallEntered
+        overallEntered,
+        subjectMeans["_classMean"],
+        overallMeanBand ? overallMeanBand.sub : "–"
       ]);
       doc.autoTable({
         startY: 18,
         head, body,
-        styles: { fontSize: 9, cellPadding: 3, halign: "center" },
+        styles: { fontSize: 8.5, cellPadding: 3, halign: "center" },
         columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
         headStyles: { fillColor: [0,0,0] },
         didParseCell: (data) => {
@@ -2900,6 +2910,14 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
           }
         },
       });
+      const finalY = doc.lastAutoTable.finalY + 8;
+      const totalMeanBand = getGrade((subjectMeans["_meanTotal"]/subjectMeans["_maxTotal"])*100);
+      doc.setFontSize(10);
+      doc.setFont(undefined, "bold");
+      doc.text(
+        `Class Mean Total: ${subjectMeans["_meanTotal"]}/${subjectMeans["_maxTotal"]}  (${subjectMeans["_classMean"]}%, ${totalMeanBand?totalMeanBand.sub:"–"})`,
+        14, finalY
+      );
       const fname2 = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
       doc.save(`${fname2}_GradeDistribution.pdf`);
     } catch (err) {
