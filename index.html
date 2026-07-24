@@ -1882,7 +1882,7 @@ function ReportCard({ learner, grade, stream, term, year, classTeacher, closingD
         <div style={RC.gradingKey}>
           <div style={RC.keyTitle}>GRADING KEY</div>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:9}}>
-            <thead><tr style={{background:"#000",color:"#fff"}}><th style={RC.kth}>Code</th><th style={RC.kth}>Range</th><th style={RC.kth}>Pts</th></tr></thead>
+            <thead><tr style={{background:"#fff",color:"#000",borderBottom:"2px solid #000"}}><th style={RC.kth}>Code</th><th style={RC.kth}>Range</th><th style={RC.kth}>Pts</th></tr></thead>
             <tbody>{GRADES.map(g=>(
               <tr key={g.sub}>
                 <td style={{...RC.ktd,fontWeight:700}}>{g.sub}</td>
@@ -2794,7 +2794,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
         head: [["#","Name",...SUBJECTS]],
         body: list.map((l,i)=>[i+1, l.name, ...SUBJECTS.map(()=>"")]),
         styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [0,0,0] },
+        headStyles: { fillColor: [255,255,255], textColor: [0,0,0], fontStyle: "bold", lineColor: [0,0,0], lineWidth: 0.3 },
       });
       doc.save(`${getStreamLabel(grade,stream).replace(/\s/g,"_")}_BlankClassList.pdf`);
     } catch (err) {
@@ -2821,7 +2821,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
         head: [header],
         body: [...rows, meanRow],
         styles: { fontSize: 7, cellPadding: 1.5 },
-        headStyles: { fillColor: [0,0,0] },
+        headStyles: { fillColor: [255,255,255], textColor: [0,0,0], fontStyle: "bold", lineColor: [0,0,0], lineWidth: 0.3 },
       });
       const fname = split&&viewMode==="combined" ? `Grade${grade}_Combined` : getStreamLabel(grade,stream).replace(/\s/g,"_");
       doc.save(`${fname}_FilledResults.pdf`);
@@ -2902,7 +2902,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
         head, body,
         styles: { fontSize: 8.5, cellPadding: 3, halign: "center" },
         columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
-        headStyles: { fillColor: [0,0,0] },
+        headStyles: { fillColor: [255,255,255], textColor: [0,0,0], fontStyle: "bold", lineColor: [0,0,0], lineWidth: 0.3 },
         didParseCell: (data) => {
           if (data.row.index === body.length - 1) {
             data.cell.styles.fillColor = [230,230,230];
@@ -3002,7 +3002,7 @@ function renderNodeToPdfPage(doc, node) {
         return [sub, v, g?g.sub:"-", g?g.points:"-", rk];
       }),
       styles: { fontSize: 8.5, cellPadding: 2 },
-      headStyles: { fillColor: [0,0,0] },
+      headStyles: { fillColor: [255,255,255], textColor: [0,0,0], fontStyle: "bold", lineColor: [0,0,0], lineWidth: 0.3 },
       margin: { left: 12, right: 12 },
     });
     y = doc.lastAutoTable.finalY + 4;
@@ -3033,7 +3033,7 @@ function renderNodeToPdfPage(doc, node) {
         head: [["Pathway","Learning Areas Used","Score","Performance"]],
         body: pathways.map(p => [p.name, p.subjects.join(", "), `${p.score}/${p.outOf}`, `${p.percent}%`]),
         styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [0,0,0] },
+        headStyles: { fillColor: [255,255,255], textColor: [0,0,0], fontStyle: "bold", lineColor: [0,0,0], lineWidth: 0.3 },
         margin: { left: 12, right: 12 },
       });
       y = doc.lastAutoTable.finalY + 4;
@@ -3052,7 +3052,7 @@ function renderNodeToPdfPage(doc, node) {
       head: [["Code","Range","Pts"]],
       body: GRADES.map(g => [g.sub, `${g.min}-${g.max}%`, g.points]),
       styles: { fontSize: 7.5, cellPadding: 1.5 },
-      headStyles: { fillColor: [0,0,0] },
+      headStyles: { fillColor: [255,255,255], textColor: [0,0,0], fontStyle: "bold", lineColor: [0,0,0], lineWidth: 0.3 },
       margin: { left: 12 },
       tableWidth: 60,
     });
@@ -3736,8 +3736,8 @@ const RC = {
   infoVal:     {fontWeight:700,fontSize:11,color:"#000"},
   sectionTitle:{fontWeight:900,fontSize:10,letterSpacing:1,color:"#000",borderBottom:"2px solid #000",paddingBottom:2,marginBottom:5,textTransform:"uppercase"},
   table:       {width:"100%",borderCollapse:"collapse",marginBottom:8},
-  th:          {background:"#000",color:"#fff",padding:"5px 7px",fontWeight:700,fontSize:10,textAlign:"left",border:"1px solid #888"},
-  thC:         {background:"#000",color:"#fff",padding:"5px 7px",fontWeight:700,fontSize:10,textAlign:"center",border:"1px solid #888"},
+  th:          {background:"#fff",color:"#000",padding:"5px 7px",fontWeight:800,fontSize:10,textAlign:"left",border:"1px solid #000",borderBottom:"2px solid #000"},
+  thC:         {background:"#fff",color:"#000",padding:"5px 7px",fontWeight:800,fontSize:10,textAlign:"center",border:"1px solid #000",borderBottom:"2px solid #000"},
   td:          {padding:"5px 7px",border:"1px solid #ddd",color:"#000"},
   tdC:         {padding:"5px 7px",border:"1px solid #ddd",textAlign:"center",color:"#000"},
   codeBadge:   {fontWeight:900,fontSize:11,color:"#000",border:"1.5px solid #000",borderRadius:3,padding:"1px 5px"},
@@ -3764,7 +3764,7 @@ const CL = {
   schoolName: {fontSize:15,fontWeight:900,color:"#000",letterSpacing:1},
   sub:        {fontSize:9,color:"#333",marginTop:2},
   table:      {width:"100%",borderCollapse:"collapse",fontSize:8},
-  th:         {background:"#000",color:"#fff",padding:"4px 3px",fontWeight:700,textAlign:"center",border:"1px solid #555",fontSize:8},
+  th:         {background:"#fff",color:"#000",padding:"4px 3px",fontWeight:800,textAlign:"center",border:"1px solid #000",borderBottom:"2px solid #000",fontSize:8},
   td:         {padding:"4px 3px",border:"1px solid #bbb",color:"#000"},
   tdC:        {padding:"4px 3px",border:"1px solid #bbb",color:"#000",textAlign:"center"},
   footer:     {textAlign:"center",fontSize:7,color:"#555",borderTop:"1px solid #ccc",paddingTop:4,marginTop:5},
