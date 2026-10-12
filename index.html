@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>School Results App</title>
+<title>Results Management App</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#111111" />
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
@@ -354,11 +354,11 @@ function resolveGHConfig() {
     const t = p.get("t"), o = p.get("o"), r = p.get("r");
     if (t && o && r) {
       const cfg = { token: t, owner: o, repo: r };
-      localStorage.setItem("sision_gh", JSON.stringify(cfg));
+      localStorage.setItem("school_gh", JSON.stringify(cfg));
       return cfg;
     }
   } catch {}
-  try { const s = localStorage.getItem("sision_gh"); if (s) return JSON.parse(s); } catch {}
+  try { const s = localStorage.getItem("school_gh"); if (s) return JSON.parse(s); } catch {}
   return null;
 }
 
@@ -424,7 +424,7 @@ async function saveShared(key, data) {
 // that currently exists" — expand that sentinel against the live class list.
 async function resolveUserClasses(classesField) {
   if (classesField === "ALL") {
-    const cfg = (await loadShared("sision_classes_config", null)) || {"7":[""],"8":[""],"9":[""]};
+    const cfg = (await loadShared("school_classes_config", null)) || {"7":[""],"8":[""],"9":[""]};
     return Object.entries(cfg).flatMap(([g, arr]) =>
       (arr && arr.length ? arr : [""]).map(s => ({ grade: g, stream: s })));
   }
@@ -487,7 +487,7 @@ function SetupScreen({ onDone }) {
       if (!res.ok) { setStatus("fail"); return; }
       GH = { token: t, owner: o, repo: r };
       DB_CACHE = null; DB_SHA = null;
-      localStorage.setItem("sision_gh", JSON.stringify(GH));
+      localStorage.setItem("school_gh", JSON.stringify(GH));
       setStatus("ok");
       setTimeout(onDone, 700);
     } catch { setStatus("fail"); }
@@ -575,7 +575,7 @@ function LoginScreen({ onLogin }) {
       try {
         if (GH) {
           await loadDB(true);
-          const sc = await loadShared("sision_school_config", null);
+          const sc = await loadShared("school_config", null);
           if (sc && sc.name) { setSchoolName(sc.name); document.title = sc.name + " — Results"; }
         }
       } catch {}
@@ -609,7 +609,7 @@ function LoginScreen({ onLogin }) {
     } catch {}
     const session = { username: uname, role: entry.role, name: displayName,
       classes: await resolveUserClasses(entry.classes), subjects: entry.subjects || [] };
-    try { localStorage.setItem("sision_user_session", JSON.stringify(session)); } catch {}
+    try { localStorage.setItem("school_user_session", JSON.stringify(session)); } catch {}
     onLogin(session);
   }
 
@@ -622,7 +622,7 @@ function LoginScreen({ onLogin }) {
     <div style={{ background: "#111", minHeight: "100vh", padding: "16px 12px" }}>
       <div style={bx}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 1 }}>{(schoolName||"School Results App").toUpperCase()}</div>
+          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 1 }}>{(schoolName||"Results Management App").toUpperCase()}</div>
           <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>Sign in to continue</div>
         </div>
         <label style={{ fontSize: 12, fontWeight: 700, color: "#444" }}>Username</label>
@@ -754,7 +754,7 @@ function SchoolSettingsScreen({ schoolName, schoolCounty, schoolMotto, schoolPOB
     setSaving(true);
     try {
       const data = { name, county, motto, poBox, phone, email };
-      const ok = await saveShared("sision_school_config", data);
+      const ok = await saveShared("school_config", data);
       if (ok) {
         onSave(data);
         document.title = (name||"Results App") + " — Results";
@@ -860,7 +860,7 @@ function ManageClassesScreen({ classesConfig, onSave, onDone }) {
     if (!GH) { alert("Not connected to GitHub. Connect first so this is shared with everyone."); return; }
     setSaving(true);
     try {
-      const ok = await saveShared("sision_classes_config", cfg);
+      const ok = await saveShared("school_classes_config", cfg);
       if (ok) {
         onSave(cfg);
         setSaved(true);
@@ -973,6 +973,11 @@ function shortTermLabel(t) {
           .replace("Mid Term","MT").replace("End Term","ET");
 }
 const YEARS = ["2024","2025","2026","2027","2028","2029","2030","2031","2032"];
+
+// ── This app lives in its own repo, separate from the Timetable app. ──────
+// Edit this one line with your Timetable app's actual GitHub Pages URL
+// (e.g. "https://yourname.github.io/sision-timetable/") once both are deployed.
+const TIMETABLE_APP_URL = "EDIT_ME_TIMETABLE_APP_URL";
 
 function getGrade(score) {
   if (score === "" || score === null || score === undefined) return null;
@@ -1106,31 +1111,31 @@ const USERS = {
   "classteacher9": { password: "2026", role: "classTeacher", name: "Class Teacher (edit me)",
     classes: [{grade:"9",stream:""}] },
 
-  "mathematics": { password: "math2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "mathematics": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["MATH"], classes: "ALL" },
-  "english": { password: "eng2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "english": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["ENG"], classes: "ALL" },
-  "kiswahili": { password: "kis2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "kiswahili": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["KISW"], classes: "ALL" },
-  "science": { password: "sci2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "science": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["SCIENCE"], classes: "ALL" },
-  "pretechnical": { password: "pts2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "pretechnical": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["PRETECH"], classes: "ALL" },
-  "agriculture": { password: "2026agric", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "agriculture": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["AGRIC"], classes: "ALL" },
-  "socialstudies": { password: "ss2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "socialstudies": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["SOCIAL"], classes: "ALL" },
-  "re": { password: "re2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "re": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["RE"], classes: "ALL" },
-  "creativearts": { password: "cas2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "creativearts": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["C/A"], classes: "ALL" },
 };
 
 // ─── YEAR ADVANCEMENT HELPERS ────────────────────────────────────────────────
 // Key to store the advancement config for a given year
-function advancementKey(toYear) { return `sision_advancement_${toYear}`; }
+function advancementKey(toYear) { return `school_advancement_${toYear}`; }
 // Key to track whether a year has been set up
-function yearSetupKey(toYear) { return `sision_year_setup_done_${toYear}`; }
+function yearSetupKey(toYear) { return `school_year_setup_done_${toYear}`; }
 
 async function isYearSetupDone(toYear) {
   try { return !!(await loadShared(yearSetupKey(toYear), null)); } catch { return false; }
@@ -1223,7 +1228,7 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
   async function applyAdvancement() {
     const pwd = window.prompt("This will promote learners to the next grade (Grade 9 will exit the school). Enter the promotion password to continue:");
     if (pwd === null) return; // cancelled
-    if (pwd.trim().toLowerCase() !== "sision") {
+    if (pwd.trim().toLowerCase() !== "school") {
       alert("Incorrect password. Promotion was NOT applied.");
       return;
     }
@@ -1239,7 +1244,7 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
         const stored = await loadShared(learnersKey("8", s), null);
         const base = stored || (INITIAL_LEARNERS["8"] && INITIAL_LEARNERS["8"][s]) || [];
         await saveShared(learnersKey("9", s), base.map(l=>({name:l.name, admNo:l.admNo||""})));
-        await saveShared(`sision_teacher_9_${s||"none"}_${toYear}`, grade9Teachers[s] || "");
+        await saveShared(`school_teacher_9_${s||"none"}_${toYear}`, grade9Teachers[s] || "");
       }
 
       // ── 3. Grade 7 classes → Grade 8, same names carried forward ──────
@@ -1247,14 +1252,14 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
         const stored = await loadShared(learnersKey("7", s), null);
         const base = stored || (INITIAL_LEARNERS["7"] && INITIAL_LEARNERS["7"][s]) || [];
         await saveShared(learnersKey("8", s), base.map(l=>({name:l.name, admNo:l.admNo||""})));
-        await saveShared(`sision_teacher_8_${s||"none"}_${toYear}`, grade8Teachers[s] || "");
+        await saveShared(`school_teacher_8_${s||"none"}_${toYear}`, grade8Teachers[s] || "");
       }
 
       // ── 4. New Grade 7 intake ──────────────────────────────────────────
       for (const s of newGr7Classes) {
         const list = newGr7Learners.filter(l => l.cls === s).map(l => ({name: l.name, admNo: l.admNo||""}));
         await saveShared(learnersKey("7", s), list);
-        await saveShared(`sision_teacher_7_${s||"none"}_${toYear}`, newGr7Teachers[s] || "");
+        await saveShared(`school_teacher_7_${s||"none"}_${toYear}`, newGr7Teachers[s] || "");
       }
 
       // ── 5. Save the resulting class list so the whole app picks it up ──
@@ -1263,7 +1268,7 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
         "8": grade7Classes,
         "9": grade8Classes,
       };
-      await saveShared("sision_classes_config", nextConfig);
+      await saveShared("school_classes_config", nextConfig);
 
       await markYearSetupDone(toYear, nextConfig);
       setDone(true);
@@ -1498,6 +1503,7 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
 // Every subject's mark is a single score out of 100 (Mid Term / End Term).
 // subjectTotal() is the one place that normalizes it for grading/ranking/printing.
 function blankScores() { const s={}; SUBJECTS.forEach(sub=>s[sub]=""); return s; }
+
 function subjectTotal(scores, sub) {
   const v = scores && scores[sub];
   if (v==="" || v===null || v===undefined || isNaN(Number(v))) return "";
@@ -1546,11 +1552,11 @@ function fmtDate(d) {
 }
 
 function storageKey(grade, stream, term, year) {
-  return `sision_scores_${grade}_${stream||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
+  return `school_scores_${grade}_${stream||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
 }
-function learnersKey(grade, stream) { return `sision_learners_${grade}_${stream||"none"}`; }
+function learnersKey(grade, stream) { return `school_learners_${grade}_${stream||"none"}`; }
 function commentKey(grade, scope, term, year) {
-  return `sision_comment_${grade}_${scope||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
+  return `school_comment_${grade}_${scope||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
 }
 function getPrevTermYear(term, year, gr) {
   const TL = termsFor(gr);
@@ -1559,6 +1565,15 @@ function getPrevTermYear(term, year, gr) {
   return { prevTerm: TL[TL.length-1], prevYear: String(Number(year)-1) };
 }
 // CSV export helper
+function downloadSubjectResultsCSV(subjectChoice, subjectList, clsLabel, term, year) {
+  const rows = [["Assessment No.","Name",`${subjectChoice} Score`,"Level"]];
+  subjectList.forEach(row => {
+    const g = getGrade(row.score);
+    rows.push([row.admNo||"", row.name, row.score===""?"":row.score, g?g.sub:""]);
+  });
+  const safe = s => String(s).replace(/[^A-Za-z0-9]+/g,"_");
+  downloadCSV(rows, `${safe(clsLabel)}_${safe(subjectChoice)}_${safe(term)}_${year}.csv`);
+}
 function downloadCSV(rows, filename) {
   const csv = rows.map(r=>r.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv"});
@@ -1952,6 +1967,65 @@ function PrintableClassList({ learners, grade, stream, term, year, classTeacher,
 }
 
 // ─── REPORT CARD ─────────────────────────────────────────────────────────────
+function TrendChart({ data }) {
+  const usable = (data||[]).filter(d => d.avg!=null);
+  if (usable.length < 2) return null;
+  // Compact single-line style: the x-axis only ever contains real exams (the caller
+  // already trims off leading terms with no data), labels run diagonally so many
+  // terms/years can fit in a fixed print width without overlapping.
+  const n = data.length;
+  const W = Math.max(300, Math.min(660, 70 + n*44));
+  const H = 108, padL = 24, padR = 10, padT = 10, padB = 34;
+  const innerW = W-padL-padR, innerH = H-padT-padB;
+  const xAt = i => n>1 ? padL+(innerW*i)/(n-1) : padL+innerW/2;
+  const yAt = pct => padT+innerH-(Math.max(0,Math.min(100,pct))*innerH)/100;
+  const marks = data.map(d => (typeof d.avg==="number" && !isNaN(d.avg)) ? d.avg : null);
+  function segments(vals) {
+    const segs = []; let cur = [];
+    vals.forEach((v,i)=>{ if (v==null) { if (cur.length) segs.push(cur); cur=[]; } else cur.push([i,v]); });
+    if (cur.length) segs.push(cur);
+    return segs;
+  }
+  function pathOf(vals) {
+    return segments(vals).map(seg => seg.map(([i,v],k)=>`${k===0?"M":"L"}${xAt(i).toFixed(1)} ${yAt(v).toFixed(1)}`).join(" ")).join(" ");
+  }
+  const gridLines = [0,50,100];
+  return (
+    <div>
+      <div style={{display:"flex",gap:12,alignItems:"center",fontSize:7.5,color:"#333",marginBottom:2}}>
+        <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:10,height:10,background:"#2e7d4f",display:"inline-block",transform:"rotate(45deg)"}}></span>Exam Mean (%)</span>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",background:"#fff",overflow:"visible"}}>
+        {gridLines.map(g=>(
+          <g key={g}>
+            <line x1={padL} y1={yAt(g)} x2={W-padR} y2={yAt(g)} stroke="#e6e6e6" strokeWidth="1" />
+            <text x={padL-4} y={yAt(g)+2} fontSize="6.5" textAnchor="end" fill="#666">{g}</text>
+          </g>
+        ))}
+        <line x1={padL} y1={padT} x2={padL} y2={H-padB} stroke="#333" strokeWidth="1" />
+        <line x1={padL} y1={H-padB} x2={W-padR} y2={H-padB} stroke="#333" strokeWidth="1" />
+        <path d={pathOf(marks)} fill="none" stroke="#2e7d4f" strokeWidth="1.8" />
+        {data.map((d,i)=>{
+          const mx = xAt(i);
+          const title = d.level && d.level!=="–" ? `${d.label}: ${marks[i]!=null?marks[i].toFixed(1)+"%":"–"} (${d.level}${d.points!=null?", "+d.points+" pts":""})` : d.label;
+          return (
+            <g key={i}>
+              {marks[i]!=null && (
+                <g transform={`translate(${mx},${yAt(marks[i])}) rotate(45)`}>
+                  <rect x="-2.6" y="-2.6" width="5.2" height="5.2" fill="#2e7d4f"><title>{title}</title></rect>
+                </g>
+              )}
+              <text x={0} y={0} fontSize="6" fill="#333" textAnchor="end"
+                    transform={`translate(${mx},${H-padB+5}) rotate(-60)`}
+                    fontWeight={d.current?"800":"400"}>{d.label}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function ReportCard({ learner, grade, stream, term, year, classTeacher, closingDay, openingDay, totalInClass, overallTotal, comment, prevTotal, subjectRanks, examHistory, schoolName, schoolCounty, schoolMotto, schoolPOBox, schoolPhone, schoolEmail }) {
   const label = stream ? `Grade ${grade} ${stream}` : `Grade ${grade}`;
   const overallGrade = learner.total>0 ? getGrade(learner.avg) : null;
@@ -2070,6 +2144,13 @@ function ReportCard({ learner, grade, stream, term, year, classTeacher, closingD
           </div>
         );
       })()}
+
+      {examHistory && examHistory.filter(d=>d.avg!=null).length >= 2 && (
+        <div style={{marginBottom:10}}>
+          <div style={RC.sectionTitle}>PERFORMANCE OVER TIME</div>
+          <TrendChart data={examHistory} />
+        </div>
+      )}
 
       {comment && String(comment).trim() && (
         <div style={{marginBottom:8}}>
@@ -2242,7 +2323,7 @@ function HistoryModal({ grade, stream, onClose }) {
   const [loading, setLoading] = useState(true);
   useEffect(()=>{
     let active = true;
-    const prefix=`sision_scores_${grade}_${stream||"none"}_`;
+    const prefix=`school_scores_${grade}_${stream||"none"}_`;
     (async()=>{
       setLoading(true);
       const keys = await listSharedKeys(prefix);
@@ -2308,10 +2389,10 @@ function HistoryModal({ grade, stream, onClose }) {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
   const [userSession, setUserSession] = useState(() => {
-    try { const s = localStorage.getItem("sision_user_session"); return s ? JSON.parse(s) : null; } catch { return null; }
+    try { const s = localStorage.getItem("school_user_session"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
     function logout() {
-    try { localStorage.removeItem("sision_user_session"); } catch {}
+    try { localStorage.removeItem("school_user_session"); } catch {}
     setUserSession(null);
   }
   const isAdmin = !!userSession && userSession.role === "admin";
@@ -2326,10 +2407,10 @@ function App() {
   const [stream, setStream]       = useState("");
   // "view" mode: "stream" = single class, "combined" = all Grade 8
   const [viewMode, setViewMode]   = useState("stream");
-  const [term, setTerm]           = useState(()=>localStorage.getItem("sision_last_term")||"Mid Term 2");
-  const [year, setYear]           = useState(()=>localStorage.getItem("sision_last_year")||"2026");
-  React.useEffect(()=>{ localStorage.setItem("sision_last_term", term); }, [term]);
-  React.useEffect(()=>{ localStorage.setItem("sision_last_year", year); }, [year]);
+  const [term, setTerm]           = useState(()=>localStorage.getItem("school_last_term")||"Mid Term 2");
+  const [year, setYear]           = useState(()=>localStorage.getItem("school_last_year")||"2026");
+  React.useEffect(()=>{ localStorage.setItem("school_last_term", term); }, [term]);
+  React.useEffect(()=>{ localStorage.setItem("school_last_year", year); }, [year]);
   const [classTeacher, setClassTeacher] = useState("");
 
   // Year advancement wizard
@@ -2364,10 +2445,10 @@ function App() {
   // Load classes config + school details from the shared database once connected.
   useEffect(()=>{
     (async()=>{
-      const cfg = await loadShared("sision_classes_config", null);
+      const cfg = await loadShared("school_classes_config", null);
       setClassesConfig(normalizeClassesConfig(cfg));
       setClassesConfigLoaded(true);
-      const sc = await loadShared("sision_school_config", null);
+      const sc = await loadShared("school_config", null);
       if (sc) {
         setSchoolName(sc.name || "");
         setSchoolCounty(sc.county || "");
@@ -2383,7 +2464,7 @@ function App() {
   // Load class teacher from storage — one name per grade+class, every year.
   useEffect(()=>{
     const streamKey = stream || "none";
-    loadShared(`sision_teacher_${grade}_${streamKey}_${year}`, "").then(t=>setClassTeacher(t||""));
+    loadShared(`school_teacher_${grade}_${streamKey}_${year}`, "").then(t=>setClassTeacher(t||""));
   },[grade, stream, year]);
 
   const [closingDay, setClosingDay]     = useState("");
@@ -2408,8 +2489,8 @@ function App() {
   const [subjectSession, setSubjectSession] = useState(null); // {pin,name,subjects,classes}
   const [subjectClass, setSubjectClass]     = useState(null); // {grade,stream}
   const [subjectChoice, setSubjectChoice]   = useState(null); // e.g. "MATH"
-  const [subjectTerm, setSubjectTerm]       = useState(()=>localStorage.getItem("sision_last_term")||"Mid Term 2");
-  const [subjectYear, setSubjectYear]       = useState(()=>localStorage.getItem("sision_last_year")||"2026");
+  const [subjectTerm, setSubjectTerm]       = useState(()=>localStorage.getItem("school_last_term")||"Mid Term 2");
+  const [subjectYear, setSubjectYear]       = useState(()=>localStorage.getItem("school_last_year")||"2026");
   const [subjectList, setSubjectList]       = useState([]); // [{name, score}]
   const [subjectLoading, setSubjectLoading] = useState(false);
 
@@ -2565,38 +2646,40 @@ function App() {
   // Exam history state — all terms from Mid Term 2 2026 up to AND INCLUDING current term
   const [examHistoryMap, setExamHistoryMap] = useState({});
   useEffect(()=>{
-    if (page!=="results") return;
+    // Wait for the real class/stream list to finish loading. Until then, classesConfig
+    // is still its placeholder value (one blank stream per grade) — fetching history
+    // against that would silently miss every split-grade class's actual saved terms.
+    if (page!=="results" || !classesConfigLoaded) return;
     let active = true;
     (async()=>{
-      const START_TERM = "Mid Term 2";
-      const START_YEAR = 2026;
+      const curGradeNum = parseInt(grade);
       const curY = parseInt(year);
-      const TL = termsFor(grade);
-      const curIdx = TL.indexOf(term);
-      const startIdx = TL.indexOf(START_TERM);
 
-      // Build chronological list of all term/year combos from MT2 2026 to current (inclusive)
+      // Walk backward across grade promotions too (7 -> 8 -> 9), not just the current
+      // grade's year — a learner's full journey through JSS. Each earlier grade is
+      // assumed to have been one calendar year before the next (standard progression;
+      // a repeated grade would just show as a gap, not break anything).
       const allTermYears = [];
-      let y = START_YEAR;
-      let tidx = startIdx;
-      while (y < curY || (y === curY && tidx <= curIdx)) {
-        const shortYear = y !== curY ? ` '${String(y).slice(2)}` : "";
-        const shortTerm = shortTermLabel(TL[tidx]);
-        allTermYears.push({
-          label: shortTerm + shortYear,
-          term: TL[tidx],
-          year: String(y),
-          isCurrent: y === curY && tidx === curIdx
-        });
-        tidx++;
-        if (tidx >= TL.length) { tidx = 0; y++; }
+      for (let gNum = 7; gNum <= curGradeNum; gNum++) {
+        const gStr = String(gNum);
+        const gYear = curY - (curGradeNum - gNum);
+        const TL = termsFor(gStr);
+        const lastIdx = (gNum === curGradeNum) ? TL.indexOf(term) : TL.length - 1;
+        for (let tidx = 0; tidx <= lastIdx && tidx < TL.length; tidx++) {
+          const isCurrent = gNum === curGradeNum && tidx === lastIdx;
+          const gradePrefix = curGradeNum > 7 ? `G${gNum} ` : "";
+          allTermYears.push({
+            label: gradePrefix + shortTermLabel(TL[tidx]) + ` '${String(gYear).slice(2)}`,
+            grade: gStr, term: TL[tidx], year: String(gYear), isCurrent
+          });
+        }
       }
 
       const allNames = combinedForRanks.map(l => l.name);
       const histMap = {};
       allNames.forEach(n => histMap[n] = []);
 
-      for (const { label, term: t, year: ry, isCurrent } of allTermYears) {
+      for (const { label, grade: g, term: t, year: ry, isCurrent } of allTermYears) {
         if (isCurrent) {
           // Use already-loaded ranked data — no extra fetch needed
           combinedForRanks.forEach(l => {
@@ -2605,17 +2688,24 @@ function App() {
             histMap[l.name].push({
               label,
               level: hasSc ? (l.level || "–") : "–",
-              points: hasSc ? (l.points || "–") : "–"
+              points: hasSc ? (l.points ?? null) : null,
+              avg: hasSc ? Number(l.avg) : null,
+              current: true
             });
           });
         } else {
           let allData = [];
-          if (isSplitGrade(grade)) {
-            const e = (await loadShared(storageKey(grade,"East",t,ry), [])) || [];
-            const w = (await loadShared(storageKey(grade,"West",t,ry), [])) || [];
-            allData = [...e, ...w];
+          // Best available stream list for that grade — we only ever know each grade's
+          // CURRENT stream arrangement, not how it was split in an earlier year, so a
+          // renamed/re-split class from a prior year may not be found. Known limitation.
+          const streamsForHist = classesConfig[g] || [""];
+          if (streamsForHist.length > 1) {
+            const perStream = await Promise.all(
+              streamsForHist.map(s => loadShared(storageKey(g, s, t, ry), []))
+            );
+            allData = perStream.flat().filter(Boolean);
           } else {
-            allData = (await loadShared(storageKey(grade,"",t,ry), [])) || [];
+            allData = (await loadShared(storageKey(g,"",t,ry), [])) || [];
           }
           const dataMap = {};
           allData.forEach(l => { dataMap[l.name] = l; });
@@ -2625,22 +2715,34 @@ function App() {
             if (l) {
               const sc = l.scores || {};
               const hasSc = SUBJECTS.some(s => Number(sc[s]) > 0);
-              const pts = SUBJECTS.map(s => getGrade(sc[s])?.points||0).reduce((a,b)=>a+b,0);
-              const ptAvg = SUBJECTS.length ? pts/SUBJECTS.length : 0;
-              let lvl = "BE";
-              if (ptAvg>=7.5) lvl="EE"; else if (ptAvg>=5.5) lvl="ME"; else if (ptAvg>=3.0) lvl="AE";
-              histMap[name].push({ label, level: hasSc?lvl:"–", points: hasSc?pts:"–" });
+              const stats = calcStats(sc);
+              histMap[name].push({
+                label,
+                level: hasSc ? stats.level : "–",
+                points: hasSc ? stats.points : null,
+                avg: hasSc ? Number(stats.avg) : null,
+                current: false
+              });
             } else {
-              histMap[name].push({ label, level: "–", points: "–" });
+              histMap[name].push({ label, level: "–", points: null, avg: null, current: false });
             }
           });
         }
       }
+      // Trim leading entries with no data — start the chart exactly where real results
+      // begin, rather than reserving blank space for terms that were never uploaded.
+      // (Gaps in the MIDDLE of the span are left alone — those are real missing terms.)
+      Object.keys(histMap).forEach(name => {
+        const arr = histMap[name];
+        let firstReal = arr.findIndex(d => d.avg!=null || d.points!=null);
+        if (firstReal === -1) firstReal = arr.length; // no data at all -> empty
+        histMap[name] = arr.slice(firstReal);
+      });
       if (active) setExamHistoryMap(histMap);
     })();
     return ()=>{ active=false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[page, grade, term, year]);
+  },[page, grade, term, year, classesConfigLoaded]);
 
   useEffect(()=>{
     function handleBeforeUnload(e) {
@@ -2651,7 +2753,8 @@ function App() {
   },[dirty]);
 
   useEffect(()=>{
-    if (page!=="results") return;
+    // Same classesConfig-timing guard as the exam-history effect above — see note there.
+    if (page!=="results" || !classesConfigLoaded) return;
     let active = true;
     (async()=>{
       const { prevTerm, prevYear } = getPrevTermYear(term, year, grade);
@@ -2662,10 +2765,12 @@ function App() {
           if (tot>0) map[l.name] = tot;
         });
       };
-      if (isSplitGrade(grade)) {
-        const e = await loadShared(storageKey(grade,"East",prevTerm,prevYear), null);
-        const w = await loadShared(storageKey(grade,"West",prevTerm,prevYear), null);
-        addFromList(e); addFromList(w);
+      const streamsForPrev = classesConfig[grade] || [""];
+      if (streamsForPrev.length > 1) {
+        const perStream = await Promise.all(
+          streamsForPrev.map(s => loadShared(storageKey(grade, s, prevTerm, prevYear), null))
+        );
+        perStream.forEach(addFromList);
       } else {
         const s = await loadShared(storageKey(grade,"",prevTerm,prevYear), null);
         addFromList(s);
@@ -2674,7 +2779,7 @@ function App() {
     })();
     return ()=>{ active=false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[page, grade, term, year]);
+  },[page, grade, term, year, classesConfigLoaded]);
 
   const commentScope = isSplitGrade(grade) ? (viewMode==="combined" ? "Combined" : stream) : "";
   useEffect(()=>{
@@ -3137,7 +3242,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
         classesConfig={classesConfig}
         onDone={async()=>{
           setShowWizard(false);
-          const cfg = await loadShared("sision_classes_config", null);
+          const cfg = await loadShared("school_classes_config", null);
           setClassesConfig(normalizeClassesConfig(cfg));
         }}
         onSkip={()=>setShowWizard(false)}
@@ -3166,6 +3271,9 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
           {userSession.role === "admin" && <button onClick={()=>setShowWizard(true)} style={{fontSize:11,padding:"4px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:20,color:"#fff",cursor:"pointer"}}>
             🔄 Re-run Year Setup
           </button>}
+          {userSession.role === "admin" && <a href={TIMETABLE_APP_URL} style={{fontSize:11,padding:"4px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:20,color:"#fff",cursor:"pointer",textDecoration:"none",display:"inline-block"}}>
+            🗓 Timetable
+          </a>}
         </div>
       </div>
       <div style={S.homeCard}>
@@ -3218,7 +3326,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
           </div>
           <div style={S.field}>
             <label style={S.label}>Class Teacher</label>
-            <input style={S.input} value={classTeacher} onChange={e=>setClassTeacher(e.target.value)} placeholder="e.g. Ms. Zipporah Kiarie"/>
+            <input style={S.input} value={classTeacher} onChange={e=>setClassTeacher(e.target.value)} placeholder="e.g. Mr. Peter Koech"/>
           </div>
           <div style={S.field}>
             <label style={S.label}>Closing Day</label>
@@ -3325,6 +3433,10 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
               onClick={uploadSubjectScores} disabled={subjectSaving || subjectLoading || subjectNotConnected}>
               {subjectSaving?"Uploading…":(subjectSaved?"✓ Uploaded!":"⬆ Upload")}
             </button>
+            <button style={S.ghostBtn} disabled={subjectLoading || !subjectList.length}
+              onClick={()=>downloadSubjectResultsCSV(subjectChoice, subjectList, clsLabel, subjectTerm, subjectYear)}>
+              ⬇ Download
+            </button>
           </div>
         </div>
         {subjectLoading ? (
@@ -3374,10 +3486,14 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
                 })}
               </tbody>
             </table>
-            <div style={{marginTop:16}}>
+            <div style={{marginTop:16,display:"flex",gap:8,flexWrap:"wrap"}}>
               <button style={{...S.ghostBtn,...(subjectSaved?{background:"#e8f5e9",color:"#2e7d32",borderColor:"#2e7d32"}:{})}}
                 onClick={uploadSubjectScores} disabled={subjectSaving || subjectLoading}>
                 {subjectSaving?"Uploading…":(subjectSaved?"✓ Uploaded!":"⬆ Upload")}
+              </button>
+              <button style={S.ghostBtn} disabled={subjectLoading || !subjectList.length}
+                onClick={()=>downloadSubjectResultsCSV(subjectChoice, subjectList, clsLabel, subjectTerm, subjectYear)}>
+                ⬇ Download
               </button>
             </div>
           </div>
@@ -3437,6 +3553,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
             if (dirty && !window.confirm("You have unsaved changes. Leave without saving?")) return;
             setPage("home");
           }}>← Back</button>
+          {isAdmin && <a href={TIMETABLE_APP_URL} style={{...S.backBtn, marginLeft:6, textDecoration:"none", display:"inline-block"}}>🗓 Timetable</a>}
           <div style={S.topTitle}>{label} · {term} {year}
             <span style={{display:"block",fontWeight:400,fontSize:10,color:"#777"}}>Saved locally on this laptop/browser only — not shared with anyone else</span>
             {dirty && <span style={{display:"inline-block",marginTop:3,background:"#b94a2c",color:"#fff",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10}}>● Unsaved changes</span>}
@@ -3701,7 +3818,7 @@ const S = {
 
 const RC = {
   page:        {background:"#fff",color:"#000",width:"190mm",minHeight:"160mm",margin:"0 auto 4mm",padding:"10mm 12mm",fontFamily:"Arial,sans-serif",fontSize:11,boxSizing:"border-box",border:"1px solid #888"},
-  header:      {borderBottom:"3px solid #000",marginBottom:8,paddingBottom:7,textAlign:"center"},
+  header:      {borderBottom:"3px solid #000",marginBottom:8,paddingBottom:7,textAlign:"center",position:"relative"},
   schoolName:  {fontSize:20,fontWeight:900,letterSpacing:1,color:"#000"},
   schoolSub:   {fontSize:10,color:"#444"},
   reportTitle: {fontSize:12,fontWeight:700,marginTop:4,color:"#000"},
