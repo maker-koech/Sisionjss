@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Results Management App</title>
+<title>School Results App</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#111111" />
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
@@ -354,11 +354,11 @@ function resolveGHConfig() {
     const t = p.get("t"), o = p.get("o"), r = p.get("r");
     if (t && o && r) {
       const cfg = { token: t, owner: o, repo: r };
-      localStorage.setItem("school_gh", JSON.stringify(cfg));
+      localStorage.setItem("sision_gh", JSON.stringify(cfg));
       return cfg;
     }
   } catch {}
-  try { const s = localStorage.getItem("school_gh"); if (s) return JSON.parse(s); } catch {}
+  try { const s = localStorage.getItem("sision_gh"); if (s) return JSON.parse(s); } catch {}
   return null;
 }
 
@@ -424,7 +424,7 @@ async function saveShared(key, data) {
 // that currently exists" — expand that sentinel against the live class list.
 async function resolveUserClasses(classesField) {
   if (classesField === "ALL") {
-    const cfg = (await loadShared("school_classes_config", null)) || {"7":[""],"8":[""],"9":[""]};
+    const cfg = (await loadShared("sision_classes_config", null)) || {"7":[""],"8":[""],"9":[""]};
     return Object.entries(cfg).flatMap(([g, arr]) =>
       (arr && arr.length ? arr : [""]).map(s => ({ grade: g, stream: s })));
   }
@@ -487,7 +487,7 @@ function SetupScreen({ onDone }) {
       if (!res.ok) { setStatus("fail"); return; }
       GH = { token: t, owner: o, repo: r };
       DB_CACHE = null; DB_SHA = null;
-      localStorage.setItem("school_gh", JSON.stringify(GH));
+      localStorage.setItem("sision_gh", JSON.stringify(GH));
       setStatus("ok");
       setTimeout(onDone, 700);
     } catch { setStatus("fail"); }
@@ -575,7 +575,7 @@ function LoginScreen({ onLogin }) {
       try {
         if (GH) {
           await loadDB(true);
-          const sc = await loadShared("school_config", null);
+          const sc = await loadShared("sision_school_config", null);
           if (sc && sc.name) { setSchoolName(sc.name); document.title = sc.name + " — Results"; }
         }
       } catch {}
@@ -609,7 +609,7 @@ function LoginScreen({ onLogin }) {
     } catch {}
     const session = { username: uname, role: entry.role, name: displayName,
       classes: await resolveUserClasses(entry.classes), subjects: entry.subjects || [] };
-    try { localStorage.setItem("school_user_session", JSON.stringify(session)); } catch {}
+    try { localStorage.setItem("sision_user_session", JSON.stringify(session)); } catch {}
     onLogin(session);
   }
 
@@ -622,7 +622,7 @@ function LoginScreen({ onLogin }) {
     <div style={{ background: "#111", minHeight: "100vh", padding: "16px 12px" }}>
       <div style={bx}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 1 }}>{(schoolName||"Results Management App").toUpperCase()}</div>
+          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 1 }}>{(schoolName||"School Results App").toUpperCase()}</div>
           <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>Sign in to continue</div>
         </div>
         <label style={{ fontSize: 12, fontWeight: 700, color: "#444" }}>Username</label>
@@ -754,7 +754,7 @@ function SchoolSettingsScreen({ schoolName, schoolCounty, schoolMotto, schoolPOB
     setSaving(true);
     try {
       const data = { name, county, motto, poBox, phone, email };
-      const ok = await saveShared("school_config", data);
+      const ok = await saveShared("sision_school_config", data);
       if (ok) {
         onSave(data);
         document.title = (name||"Results App") + " — Results";
@@ -860,7 +860,7 @@ function ManageClassesScreen({ classesConfig, onSave, onDone }) {
     if (!GH) { alert("Not connected to GitHub. Connect first so this is shared with everyone."); return; }
     setSaving(true);
     try {
-      const ok = await saveShared("school_classes_config", cfg);
+      const ok = await saveShared("sision_classes_config", cfg);
       if (ok) {
         onSave(cfg);
         setSaved(true);
@@ -924,12 +924,6 @@ const GRADES = [
 ];
 
 const SUBJECTS = ["MATH","ENG","KISW","SCIENCE","PRETECH","AGRIC","SOCIAL","RE","C/A"];
-const SUBJECT_FULL = {
-  MATH: "Mathematics", ENG: "English", KISW: "Kiswahili", SCIENCE: "Integrated Science",
-  PRETECH: "Pre-Technical Studies", AGRIC: "Agriculture", SOCIAL: "Social Studies",
-  RE: "Religious Education", "C/A": "Creative Arts"
-};
-function subjectKey(sub){ return SUBJECT_FULL[sub] || sub; }
 
 // ── CBC Career Pathways ─────────────────────────────────────────────────
 // Groups subjects into the three JSS pathway families for the report card's
@@ -953,31 +947,7 @@ function computePathwayScores(scores) {
   });
 }
 const TERMS = ["Mid Term 1","End Term 1","Mid Term 2","End Term 2","Mid Term 3","End Term 3"];
-// Grade 9 sits three assessments in Term 3 instead of Mid Term 3 / End Term 3.
-const TERMS_G9 = ["Mid Term 1","End Term 1","Mid Term 2","End Term 2","Term 3 Assessment 1","Term 3 Assessment 2","Term 3 Final Assessment"];
-function termsFor(gr) { return String(gr) === "9" ? TERMS_G9 : TERMS; }
-// If the selected term doesn't exist for this grade (e.g. after switching grade), map it to its Term 3 equivalent.
-function normTerm(t, gr) {
-  const list = termsFor(gr);
-  if (list.includes(t)) return t;
-  const g9 = String(gr) === "9";
-  const map = g9
-    ? { "Mid Term 3": "Term 3 Assessment 1", "End Term 3": "Term 3 Final Assessment",
-        "Assessment 1": "Term 3 Assessment 1", "Assessment 2": "Term 3 Assessment 2", "Final Assessment": "Term 3 Final Assessment" }
-    : { "Term 3 Assessment 1": "Mid Term 3", "Term 3 Assessment 2": "End Term 3", "Term 3 Final Assessment": "End Term 3",
-        "Assessment 1": "Mid Term 3", "Assessment 2": "End Term 3", "Final Assessment": "End Term 3" };
-  return map[t] || list[0];
-}
-function shortTermLabel(t) {
-  return t.replace("Term 3 Final Assessment","T3 FA").replace("Term 3 Assessment 1","T3 A1").replace("Term 3 Assessment 2","T3 A2")
-          .replace("Mid Term","MT").replace("End Term","ET");
-}
 const YEARS = ["2024","2025","2026","2027","2028","2029","2030","2031","2032"];
-
-// ── This app lives in its own repo, separate from the Timetable app. ──────
-// Edit this one line with your Timetable app's actual GitHub Pages URL
-// (e.g. "https://yourname.github.io/sision-timetable/") once both are deployed.
-const TIMETABLE_APP_URL = "EDIT_ME_TIMETABLE_APP_URL";
 
 function getGrade(score) {
   if (score === "" || score === null || score === undefined) return null;
@@ -1014,26 +984,14 @@ function calcStats(scores) {
   return { total, points, avg, level };
 }
 
-function meanOf(vals) { return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : "–"; }
-
 function calcSubjectMeans(rankedList) {
   const means = {};
-  const boys = rankedList.filter(l=>l.gender==="M");
-  const girls = rankedList.filter(l=>l.gender==="F");
   SUBJECTS.forEach(sub => {
-    const valsOf = list => list.map(l => subjectTotal(l.scores, sub)).filter(v => v !== "" && v > 0);
-    means[sub] = meanOf(valsOf(rankedList));
-    means[sub+"_M"] = meanOf(valsOf(boys));
-    means[sub+"_F"] = meanOf(valsOf(girls));
+    const vals = rankedList.map(l => subjectTotal(l.scores, sub)).filter(v => v !== "" && v > 0);
+    means[sub] = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : "–";
   });
   const allAvgs = rankedList.filter(l=>l.total>0).map(l=>parseFloat(l.avg));
-  const boyAvgs = boys.filter(l=>l.total>0).map(l=>parseFloat(l.avg));
-  const girlAvgs = girls.filter(l=>l.total>0).map(l=>parseFloat(l.avg));
-  means["_classMean"] = meanOf(allAvgs);
-  means["_boysMean"] = meanOf(boyAvgs);
-  means["_girlsMean"] = meanOf(girlAvgs);
-  means["_boysCount"] = boys.filter(l=>l.total>0).length;
-  means["_girlsCount"] = girls.filter(l=>l.total>0).length;
+  means["_classMean"] = allAvgs.length ? (allAvgs.reduce((a,b)=>a+b,0)/allAvgs.length).toFixed(2) : "–";
   // Mean total marks expressed as a fraction of the maximum possible total
   // (sum of every learner's overall total, divided by number of learners,
   // shown like "370/900").
@@ -1042,20 +1000,6 @@ function calcSubjectMeans(rankedList) {
   means["_meanTotal"] = allTotals.length ? Math.round(allTotals.reduce((a,b)=>a+b,0)/allTotals.length) : 0;
   means["_maxTotal"] = maxTotal;
   return means;
-}
-
-// Top scorer ("subject champion") per subject across a ranked list.
-function calcSubjectChampions(rankedList) {
-  const champs = {};
-  SUBJECTS.forEach(sub => {
-    let best = null;
-    rankedList.forEach(l => {
-      const v = subjectTotal(l.scores, sub);
-      if (v !== "" && v > 0 && (!best || v > best.score)) best = { name: l.name, score: v };
-    });
-    champs[sub] = best;
-  });
-  return champs;
 }
 
 // Compute per-subject rank for every learner across a combined list (East+West merged)
@@ -1111,31 +1055,31 @@ const USERS = {
   "classteacher9": { password: "2026", role: "classTeacher", name: "Class Teacher (edit me)",
     classes: [{grade:"9",stream:""}] },
 
-  "mathematics": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "mathematics": { password: "math2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["MATH"], classes: "ALL" },
-  "english": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "english": { password: "eng2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["ENG"], classes: "ALL" },
-  "kiswahili": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "kiswahili": { password: "kis2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["KISW"], classes: "ALL" },
-  "science": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "science": { password: "sci2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["SCIENCE"], classes: "ALL" },
-  "pretechnical": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "pretechnical": { password: "pts2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["PRETECH"], classes: "ALL" },
-  "agriculture": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "agriculture": { password: "2026agric", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["AGRIC"], classes: "ALL" },
-  "socialstudies": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "socialstudies": { password: "ss2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["SOCIAL"], classes: "ALL" },
-  "re": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "re": { password: "re2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["RE"], classes: "ALL" },
-  "creativearts": { password: "2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
+  "creativearts": { password: "cas2026", role: "subjectTeacher", name: "Subject Teacher (edit me)",
     subjects: ["C/A"], classes: "ALL" },
 };
 
 // ─── YEAR ADVANCEMENT HELPERS ────────────────────────────────────────────────
 // Key to store the advancement config for a given year
-function advancementKey(toYear) { return `school_advancement_${toYear}`; }
+function advancementKey(toYear) { return `sision_advancement_${toYear}`; }
 // Key to track whether a year has been set up
-function yearSetupKey(toYear) { return `school_year_setup_done_${toYear}`; }
+function yearSetupKey(toYear) { return `sision_year_setup_done_${toYear}`; }
 
 async function isYearSetupDone(toYear) {
   try { return !!(await loadShared(yearSetupKey(toYear), null)); } catch { return false; }
@@ -1228,7 +1172,7 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
   async function applyAdvancement() {
     const pwd = window.prompt("This will promote learners to the next grade (Grade 9 will exit the school). Enter the promotion password to continue:");
     if (pwd === null) return; // cancelled
-    if (pwd.trim().toLowerCase() !== "school") {
+    if (pwd.trim().toLowerCase() !== "sision") {
       alert("Incorrect password. Promotion was NOT applied.");
       return;
     }
@@ -1244,7 +1188,7 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
         const stored = await loadShared(learnersKey("8", s), null);
         const base = stored || (INITIAL_LEARNERS["8"] && INITIAL_LEARNERS["8"][s]) || [];
         await saveShared(learnersKey("9", s), base.map(l=>({name:l.name, admNo:l.admNo||""})));
-        await saveShared(`school_teacher_9_${s||"none"}_${toYear}`, grade9Teachers[s] || "");
+        await saveShared(`sision_teacher_9_${s||"none"}_${toYear}`, grade9Teachers[s] || "");
       }
 
       // ── 3. Grade 7 classes → Grade 8, same names carried forward ──────
@@ -1252,14 +1196,14 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
         const stored = await loadShared(learnersKey("7", s), null);
         const base = stored || (INITIAL_LEARNERS["7"] && INITIAL_LEARNERS["7"][s]) || [];
         await saveShared(learnersKey("8", s), base.map(l=>({name:l.name, admNo:l.admNo||""})));
-        await saveShared(`school_teacher_8_${s||"none"}_${toYear}`, grade8Teachers[s] || "");
+        await saveShared(`sision_teacher_8_${s||"none"}_${toYear}`, grade8Teachers[s] || "");
       }
 
       // ── 4. New Grade 7 intake ──────────────────────────────────────────
       for (const s of newGr7Classes) {
         const list = newGr7Learners.filter(l => l.cls === s).map(l => ({name: l.name, admNo: l.admNo||""}));
         await saveShared(learnersKey("7", s), list);
-        await saveShared(`school_teacher_7_${s||"none"}_${toYear}`, newGr7Teachers[s] || "");
+        await saveShared(`sision_teacher_7_${s||"none"}_${toYear}`, newGr7Teachers[s] || "");
       }
 
       // ── 5. Save the resulting class list so the whole app picks it up ──
@@ -1268,7 +1212,7 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
         "8": grade7Classes,
         "9": grade8Classes,
       };
-      await saveShared("school_classes_config", nextConfig);
+      await saveShared("sision_classes_config", nextConfig);
 
       await markYearSetupDone(toYear, nextConfig);
       setDone(true);
@@ -1503,7 +1447,6 @@ function YearAdvancementWizard({ fromYear, toYear, classesConfig, onDone, onSkip
 // Every subject's mark is a single score out of 100 (Mid Term / End Term).
 // subjectTotal() is the one place that normalizes it for grading/ranking/printing.
 function blankScores() { const s={}; SUBJECTS.forEach(sub=>s[sub]=""); return s; }
-
 function subjectTotal(scores, sub) {
   const v = scores && scores[sub];
   if (v==="" || v===null || v===undefined || isNaN(Number(v))) return "";
@@ -1552,28 +1495,18 @@ function fmtDate(d) {
 }
 
 function storageKey(grade, stream, term, year) {
-  return `school_scores_${grade}_${stream||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
+  return `sision_scores_${grade}_${stream||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
 }
-function learnersKey(grade, stream) { return `school_learners_${grade}_${stream||"none"}`; }
+function learnersKey(grade, stream) { return `sision_learners_${grade}_${stream||"none"}`; }
 function commentKey(grade, scope, term, year) {
-  return `school_comment_${grade}_${scope||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
+  return `sision_comment_${grade}_${scope||"none"}_${term.replace(/\s+/g,"_")}_${year}`;
 }
-function getPrevTermYear(term, year, gr) {
-  const TL = termsFor(gr);
-  const idx = TL.indexOf(term);
-  if (idx > 0) return { prevTerm: TL[idx-1], prevYear: year };
-  return { prevTerm: TL[TL.length-1], prevYear: String(Number(year)-1) };
+function getPrevTermYear(term, year) {
+  const idx = TERMS.indexOf(term);
+  if (idx > 0) return { prevTerm: TERMS[idx-1], prevYear: year };
+  return { prevTerm: TERMS[TERMS.length-1], prevYear: String(Number(year)-1) };
 }
 // CSV export helper
-function downloadSubjectResultsCSV(subjectChoice, subjectList, clsLabel, term, year) {
-  const rows = [["Assessment No.","Name",`${subjectChoice} Score`,"Level"]];
-  subjectList.forEach(row => {
-    const g = getGrade(row.score);
-    rows.push([row.admNo||"", row.name, row.score===""?"":row.score, g?g.sub:""]);
-  });
-  const safe = s => String(s).replace(/[^A-Za-z0-9]+/g,"_");
-  downloadCSV(rows, `${safe(clsLabel)}_${safe(subjectChoice)}_${safe(term)}_${year}.csv`);
-}
 function downloadCSV(rows, filename) {
   const csv = rows.map(r=>r.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv"});
@@ -1629,14 +1562,6 @@ function ResultsAnalysisModal({ ranked, levelCounts, means, label, term, year, s
     .slice()
     .sort((a,b)=>b.total-a.total)
     .slice(0,5);
-
-  const champions = calcSubjectChampions(ranked);
-  const boysMarked = marked.filter(l=>l.gender==="M");
-  const girlsMarked = marked.filter(l=>l.gender==="F");
-  const boysPass = boysMarked.filter(l=>l.level==="EE"||l.level==="ME").length;
-  const girlsPass = girlsMarked.filter(l=>l.level==="EE"||l.level==="ME").length;
-  const boysPassRate = boysMarked.length ? Math.round((boysPass/boysMarked.length)*100) : 0;
-  const girlsPassRate = girlsMarked.length ? Math.round((girlsPass/girlsMarked.length)*100) : 0;
 
   const box = { position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
     display:"flex", alignItems:"center", justifyContent:"center", padding:12 };
@@ -1735,30 +1660,6 @@ ${inner}
               </div>
             </div>
 
-            <div style={sectionH}>Performance by Gender</div>
-            <div style={statGrid}>
-              <div style={statBox}>
-                <div style={{fontWeight:900, fontSize:22}}>{means["_boysMean"]!=="–"?means["_boysMean"]+"%":"–"}</div>
-                <div style={{fontWeight:700, fontSize:11}}>BOYS MEAN ({boysMarked.length})</div>
-              </div>
-              <div style={statBox}>
-                <div style={{fontWeight:900, fontSize:22}}>{means["_girlsMean"]!=="–"?means["_girlsMean"]+"%":"–"}</div>
-                <div style={{fontWeight:700, fontSize:11}}>GIRLS MEAN ({girlsMarked.length})</div>
-              </div>
-              <div style={statBox}>
-                <div style={{fontWeight:900, fontSize:22}}>{means["_classMean"]!=="–"?means["_classMean"]+"%":"–"}</div>
-                <div style={{fontWeight:700, fontSize:11}}>GENERAL MEAN</div>
-              </div>
-              <div style={statBox}>
-                <div style={{fontWeight:900, fontSize:22}}>{boysPassRate}%</div>
-                <div style={{fontWeight:700, fontSize:11}}>BOYS PASS RATE</div>
-              </div>
-              <div style={statBox}>
-                <div style={{fontWeight:900, fontSize:22}}>{girlsPassRate}%</div>
-                <div style={{fontWeight:700, fontSize:11}}>GIRLS PASS RATE</div>
-              </div>
-            </div>
-
             <div style={sectionH}>Grade Distribution by Subject</div>
             <div style={{overflowX:"auto"}}>
               <table style={table}>
@@ -1766,8 +1667,6 @@ ${inner}
                   <tr>
                     <th style={{...th,textAlign:"left"}}>Subject</th>
                     <th style={th}>Mean%</th>
-                    <th style={th}>Boys Mean</th>
-                    <th style={th}>Girls Mean</th>
                     <th style={th}>EE</th>
                     <th style={th}>ME</th>
                     <th style={th}>AE</th>
@@ -1778,37 +1677,13 @@ ${inner}
                 <tbody>
                   {SUBJECTS.map(s=>(
                     <tr key={s}>
-                      <td style={{...td,textAlign:"left",fontWeight:700}}>{s} <span style={{fontWeight:400,color:"#888"}}>({subjectKey(s)})</span></td>
+                      <td style={{...td,textAlign:"left",fontWeight:700}}>{s}</td>
                       <td style={td}>{means[s]}</td>
-                      <td style={td}>{means[s+"_M"]}</td>
-                      <td style={td}>{means[s+"_F"]}</td>
                       <td style={td}>{subjectDist[s].counts.EE}</td>
                       <td style={td}>{subjectDist[s].counts.ME}</td>
                       <td style={td}>{subjectDist[s].counts.AE}</td>
                       <td style={td}>{subjectDist[s].counts.BE}</td>
                       <td style={td}>{subjectDist[s].n}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={sectionH}>Subject Champions (Top Scorer per Subject)</div>
-            <div style={{overflowX:"auto"}}>
-              <table style={table}>
-                <thead>
-                  <tr>
-                    <th style={{...th,textAlign:"left"}}>Subject</th>
-                    <th style={{...th,textAlign:"left"}}>Champion</th>
-                    <th style={th}>Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {SUBJECTS.map(s=>(
-                    <tr key={s}>
-                      <td style={{...td,textAlign:"left",fontWeight:700}}>{s} <span style={{fontWeight:400,color:"#888"}}>({subjectKey(s)})</span></td>
-                      <td style={{...td,textAlign:"left"}}>{champions[s]?champions[s].name:"–"}</td>
-                      <td style={td}>{champions[s]?champions[s].score:"–"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1885,7 +1760,6 @@ function PrintableClassList({ learners, grade, stream, term, year, classTeacher,
             <th style={{...CL.th,width:24}}>#</th>
             <th style={{...CL.th,width:70}}>ASSM. NO.</th>
             <th style={{...CL.th,textAlign:"left",minWidth:130}}>LEARNER NAME</th>
-            <th style={{...CL.th,width:30}}>SEX</th>
             {SUBJECTS.map(s=><th key={s} style={CL.th}>{s}</th>)}
             {hasScores && <>
               <th style={CL.th}>TOTAL</th>
@@ -1905,7 +1779,6 @@ function PrintableClassList({ learners, grade, stream, term, year, classTeacher,
                 <td style={CL.tdC}>{i+1}</td>
                 <td style={CL.tdC}>{l.admNo||"–"}</td>
                 <td style={CL.td}>{l.name}</td>
-                <td style={CL.tdC}>{l.gender||"–"}</td>
                 {SUBJECTS.map(sub=>{
                   const tot = subjectTotal(l.scores, sub);
                   const g = hasScores?getGrade(tot):null;
@@ -1931,7 +1804,7 @@ function PrintableClassList({ learners, grade, stream, term, year, classTeacher,
           })}
           {hasScores && filledCount>0 && (
             <tr style={{background:"#e8e8e8",fontWeight:700,borderTop:"2px solid #000"}}>
-              <td style={CL.tdC} colSpan={4}>CLASS MEAN ({means["_boysCount"]||0} boys, {means["_girlsCount"]||0} girls)</td>
+              <td style={CL.tdC} colSpan={2}>CLASS MEAN</td>
               {SUBJECTS.map(sub=>(
                 <td key={sub} style={{...CL.tdC,fontWeight:700}}>
                   {means[sub]}{means[sub]!=="–"&&<div style={{fontSize:7}}>{getGrade(means[sub])?.sub||""}</div>}
@@ -1942,25 +1815,8 @@ function PrintableClassList({ learners, grade, stream, term, year, classTeacher,
               </td>
             </tr>
           )}
-          {hasScores && filledCount>0 && means["_boysCount"]>0 && (
-            <tr style={{background:"#eef4fb",fontWeight:600,fontSize:10.5}}>
-              <td style={CL.tdC} colSpan={4}>BOYS MEAN</td>
-              {SUBJECTS.map(sub=><td key={sub} style={CL.tdC}>{means[sub+"_M"]}</td>)}
-              <td colSpan={overallTotal>0?6:5} style={CL.tdC}>Boys Avg: <b>{means["_boysMean"]!=="–"?means["_boysMean"]+"%":"–"}</b></td>
-            </tr>
-          )}
-          {hasScores && filledCount>0 && means["_girlsCount"]>0 && (
-            <tr style={{background:"#fdeef3",fontWeight:600,fontSize:10.5}}>
-              <td style={CL.tdC} colSpan={4}>GIRLS MEAN</td>
-              {SUBJECTS.map(sub=><td key={sub} style={CL.tdC}>{means[sub+"_F"]}</td>)}
-              <td colSpan={overallTotal>0?6:5} style={CL.tdC}>Girls Avg: <b>{means["_girlsMean"]!=="–"?means["_girlsMean"]+"%":"–"}</b></td>
-            </tr>
-          )}
         </tbody>
       </table>
-      <div style={{fontSize:8.5,color:"#555",marginTop:4,lineHeight:1.5}}>
-        <b>Key:</b> {SUBJECTS.map(s=>`${s} = ${subjectKey(s)}`).join("  ·  ")}
-      </div>
       <div style={CL.footer}>{schoolName||"Your School Name"} · {term} {year} · {label} · {new Date().toLocaleDateString()}</div>
     </div>
   );
@@ -2045,7 +1901,6 @@ function ReportCard({ learner, grade, stream, term, year, classTeacher, closingD
       <div style={RC.infoRow}>
         <div style={RC.infoBlock}><span style={RC.infoLabel}>ASSESSMENT NO:</span><span style={RC.infoVal}>{learner.admNo||"—"}</span></div>
         <div style={RC.infoBlock}><span style={RC.infoLabel}>LEARNER:</span><span style={RC.infoVal}>{learner.name}</span></div>
-        {learner.gender && <div style={RC.infoBlock}><span style={RC.infoLabel}>GENDER:</span><span style={RC.infoVal}>{learner.gender==="M"?"Boy":"Girl"}</span></div>}
         <div style={RC.infoBlock}><span style={RC.infoLabel}>CLASS:</span><span style={RC.infoVal}>{label}</span></div>
         <div style={RC.infoBlock}><span style={RC.infoLabel}>TERM:</span><span style={RC.infoVal}>{term}</span></div>
         {classTeacher&&<div style={RC.infoBlock}><span style={RC.infoLabel}>CLASS TEACHER:</span><span style={RC.infoVal}>{classTeacher}</span></div>}
@@ -2069,7 +1924,7 @@ function ReportCard({ learner, grade, stream, term, year, classTeacher, closingD
             const sRank = subjectRanks && subjectRanks[sub] ? subjectRanks[sub] : "–";
             return (
               <tr key={sub} style={{background:i%2===0?"#fff":"#f5f5f5"}}>
-                <td style={RC.td}><b>{subjectKey(sub)}</b></td>
+                <td style={RC.td}><b>{sub}</b></td>
                 <td style={{...RC.tdC,fontWeight:800,fontSize:14}}>{tot!==""?tot:"–"}</td>
                 <td style={RC.tdC}>{g?<span style={RC.codeBadge}>{g.sub}</span>:"–"}</td>
                 <td style={{...RC.tdC,fontWeight:700}}>{g?.points||"–"}</td>
@@ -2152,13 +2007,6 @@ function ReportCard({ learner, grade, stream, term, year, classTeacher, closingD
         </div>
       )}
 
-      {comment && String(comment).trim() && (
-        <div style={{marginBottom:8}}>
-          <div style={RC.sectionTitle}>CLASS TEACHER'S COMMENT</div>
-          <div style={{border:"1px solid #bbb",padding:"6px 8px",fontSize:10.5,minHeight:22,whiteSpace:"pre-wrap",color:"#000"}}>{comment}</div>
-        </div>
-      )}
-
       <div style={RC.bottomRow}>
         <div style={RC.gradingKey}>
           <div style={RC.keyTitle}>GRADING KEY</div>
@@ -2190,7 +2038,6 @@ function ScoreEntryModal({ learner, grade, splitMode, classOptions, onSave, onCl
   const [scores, setScores] = useState({...blankScores(),...learner.scores});
   const [name, setName] = useState(learner.name);
   const [admNo, setAdmNo] = useState(learner.admNo || "");
-  const [gender, setGender] = useState(learner.gender || "");
   const opts = (classOptions && classOptions.length ? classOptions : [""]);
   const [streamSel, setStreamSel] = useState(learner.stream || opts[0] || "");
   return (
@@ -2206,14 +2053,6 @@ function ScoreEntryModal({ learner, grade, splitMode, classOptions, onSave, onCl
             <div style={{...M.field,flex:2,minWidth:180}}>
               <label style={M.label}>Full Name</label>
               <input style={M.input} value={name} onChange={e=>setName(e.target.value.toUpperCase())} />
-            </div>
-            <div style={{...M.field,flex:1,minWidth:110}}>
-              <label style={M.label}>Gender</label>
-              <select style={M.input} value={gender} onChange={e=>setGender(e.target.value)}>
-                <option value="">–</option>
-                <option value="M">Boy</option>
-                <option value="F">Girl</option>
-              </select>
             </div>
             {splitMode && (
               <div style={{...M.field,flex:1,minWidth:120}}>
@@ -2244,7 +2083,7 @@ function ScoreEntryModal({ learner, grade, splitMode, classOptions, onSave, onCl
         </div>
         <div style={{...M.actions,padding:"14px 20px",margin:0,borderTop:"1px solid #eee",background:"#fff"}}>
           <button style={M.cancel} onClick={onClose}>Cancel</button>
-          <button style={M.save} onClick={()=>onSave({name:name.trim()||learner.name, admNo:admNo.trim(), gender, scores, stream:streamSel})}>Save</button>
+          <button style={M.save} onClick={()=>onSave({name:name.trim()||learner.name, admNo:admNo.trim(), scores, stream:streamSel})}>Save</button>
         </div>
       </div>
     </div>
@@ -2254,7 +2093,6 @@ function ScoreEntryModal({ learner, grade, splitMode, classOptions, onSave, onCl
 function AddLearnerModal({ grade, splitMode, defaultStream, classOptions, onAdd, onClose }) {
   const [name, setName] = useState("");
   const [admNo, setAdmNo] = useState("");
-  const [gender, setGender] = useState("");
   const opts = (classOptions && classOptions.length ? classOptions : [""]);
   const [streamSel, setStreamSel] = useState(defaultStream || opts[0] || "");
   return (
@@ -2269,14 +2107,6 @@ function AddLearnerModal({ grade, splitMode, defaultStream, classOptions, onAdd,
           <label style={M.label}>Full Name</label>
           <input style={M.input} value={name} onChange={e=>setName(e.target.value.toUpperCase())} placeholder="e.g. JANE WANJIKU"/>
         </div>
-        <div style={M.field}>
-          <label style={M.label}>Gender</label>
-          <select style={M.input} value={gender} onChange={e=>setGender(e.target.value)}>
-            <option value="">–</option>
-            <option value="M">Boy</option>
-            <option value="F">Girl</option>
-          </select>
-        </div>
         {splitMode && (
           <div style={M.field}>
             <label style={M.label}>Class</label>
@@ -2287,7 +2117,7 @@ function AddLearnerModal({ grade, splitMode, defaultStream, classOptions, onAdd,
         )}
         <div style={M.actions}>
           <button style={M.cancel} onClick={onClose}>Cancel</button>
-          <button style={M.save} onClick={()=>{if(name.trim())onAdd(name.trim(),streamSel,admNo.trim(),gender);}}>Add Learner</button>
+          <button style={M.save} onClick={()=>{if(name.trim())onAdd(name.trim(),streamSel,admNo.trim());}}>Add Learner</button>
         </div>
       </div>
     </div>
@@ -2323,7 +2153,7 @@ function HistoryModal({ grade, stream, onClose }) {
   const [loading, setLoading] = useState(true);
   useEffect(()=>{
     let active = true;
-    const prefix=`school_scores_${grade}_${stream||"none"}_`;
+    const prefix=`sision_scores_${grade}_${stream||"none"}_`;
     (async()=>{
       setLoading(true);
       const keys = await listSharedKeys(prefix);
@@ -2389,10 +2219,10 @@ function HistoryModal({ grade, stream, onClose }) {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
   const [userSession, setUserSession] = useState(() => {
-    try { const s = localStorage.getItem("school_user_session"); return s ? JSON.parse(s) : null; } catch { return null; }
+    try { const s = localStorage.getItem("sision_user_session"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
     function logout() {
-    try { localStorage.removeItem("school_user_session"); } catch {}
+    try { localStorage.removeItem("sision_user_session"); } catch {}
     setUserSession(null);
   }
   const isAdmin = !!userSession && userSession.role === "admin";
@@ -2407,10 +2237,10 @@ function App() {
   const [stream, setStream]       = useState("");
   // "view" mode: "stream" = single class, "combined" = all Grade 8
   const [viewMode, setViewMode]   = useState("stream");
-  const [term, setTerm]           = useState(()=>localStorage.getItem("school_last_term")||"Mid Term 2");
-  const [year, setYear]           = useState(()=>localStorage.getItem("school_last_year")||"2026");
-  React.useEffect(()=>{ localStorage.setItem("school_last_term", term); }, [term]);
-  React.useEffect(()=>{ localStorage.setItem("school_last_year", year); }, [year]);
+  const [term, setTerm]           = useState(()=>localStorage.getItem("sision_last_term")||"Mid Term 2");
+  const [year, setYear]           = useState(()=>localStorage.getItem("sision_last_year")||"2026");
+  React.useEffect(()=>{ localStorage.setItem("sision_last_term", term); }, [term]);
+  React.useEffect(()=>{ localStorage.setItem("sision_last_year", year); }, [year]);
   const [classTeacher, setClassTeacher] = useState("");
 
   // Year advancement wizard
@@ -2445,10 +2275,10 @@ function App() {
   // Load classes config + school details from the shared database once connected.
   useEffect(()=>{
     (async()=>{
-      const cfg = await loadShared("school_classes_config", null);
+      const cfg = await loadShared("sision_classes_config", null);
       setClassesConfig(normalizeClassesConfig(cfg));
       setClassesConfigLoaded(true);
-      const sc = await loadShared("school_config", null);
+      const sc = await loadShared("sision_school_config", null);
       if (sc) {
         setSchoolName(sc.name || "");
         setSchoolCounty(sc.county || "");
@@ -2464,7 +2294,7 @@ function App() {
   // Load class teacher from storage — one name per grade+class, every year.
   useEffect(()=>{
     const streamKey = stream || "none";
-    loadShared(`school_teacher_${grade}_${streamKey}_${year}`, "").then(t=>setClassTeacher(t||""));
+    loadShared(`sision_teacher_${grade}_${streamKey}_${year}`, "").then(t=>setClassTeacher(t||""));
   },[grade, stream, year]);
 
   const [closingDay, setClosingDay]     = useState("");
@@ -2479,7 +2309,6 @@ function App() {
   const [showHistory, setShowHistory]       = useState(false);
   const [showComment, setShowComment]       = useState(false);
   const [comment, setComment]               = useState("");
-  const [commentSaved, setCommentSaved]     = useState(false);
   const [searchTerm, setSearchTerm]         = useState("");
   const [prevTermMap, setPrevTermMap]       = useState({});
   const [saved, setSaved]                   = useState(false);
@@ -2489,8 +2318,8 @@ function App() {
   const [subjectSession, setSubjectSession] = useState(null); // {pin,name,subjects,classes}
   const [subjectClass, setSubjectClass]     = useState(null); // {grade,stream}
   const [subjectChoice, setSubjectChoice]   = useState(null); // e.g. "MATH"
-  const [subjectTerm, setSubjectTerm]       = useState(()=>localStorage.getItem("school_last_term")||"Mid Term 2");
-  const [subjectYear, setSubjectYear]       = useState(()=>localStorage.getItem("school_last_year")||"2026");
+  const [subjectTerm, setSubjectTerm]       = useState(()=>localStorage.getItem("sision_last_term")||"Mid Term 2");
+  const [subjectYear, setSubjectYear]       = useState(()=>localStorage.getItem("sision_last_year")||"2026");
   const [subjectList, setSubjectList]       = useState([]); // [{name, score}]
   const [subjectLoading, setSubjectLoading] = useState(false);
 
@@ -2635,14 +2464,6 @@ function App() {
   // subjectRankMap[learnerName][subject] = "3/62"
   const subjectRankMap = calcSubjectRanks(combinedForRanks);
 
-  // Keep the selected term valid for the selected grade (Grade 9 has Assessment 1/2/Final in Term 3).
-  useEffect(()=>{ const n = normTerm(term, grade); if (n !== term) setTerm(n); },[grade, term]);
-  useEffect(()=>{
-    if (!subjectClass) return;
-    const n = normTerm(subjectTerm, subjectClass.grade);
-    if (n !== subjectTerm) setSubjectTerm(n);
-  },[subjectClass, subjectTerm]);
-
   // Exam history state — all terms from Mid Term 2 2026 up to AND INCLUDING current term
   const [examHistoryMap, setExamHistoryMap] = useState({});
   useEffect(()=>{
@@ -2658,19 +2479,20 @@ function App() {
       // Walk backward across grade promotions too (7 -> 8 -> 9), not just the current
       // grade's year — a learner's full journey through JSS. Each earlier grade is
       // assumed to have been one calendar year before the next (standard progression;
-      // a repeated grade would just show as a gap, not break anything).
+      // a repeated grade would just show as a gap, not break anything). This app
+      // uses the same TERMS list for every grade, so no per-grade lookup is needed.
       const allTermYears = [];
       for (let gNum = 7; gNum <= curGradeNum; gNum++) {
         const gStr = String(gNum);
         const gYear = curY - (curGradeNum - gNum);
-        const TL = termsFor(gStr);
-        const lastIdx = (gNum === curGradeNum) ? TL.indexOf(term) : TL.length - 1;
-        for (let tidx = 0; tidx <= lastIdx && tidx < TL.length; tidx++) {
+        const lastIdx = (gNum === curGradeNum) ? TERMS.indexOf(term) : TERMS.length - 1;
+        for (let tidx = 0; tidx <= lastIdx && tidx < TERMS.length; tidx++) {
           const isCurrent = gNum === curGradeNum && tidx === lastIdx;
           const gradePrefix = curGradeNum > 7 ? `G${gNum} ` : "";
+          const shortTerm = TERMS[tidx].replace("Mid Term","MT").replace("End Term","ET");
           allTermYears.push({
-            label: gradePrefix + shortTermLabel(TL[tidx]) + ` '${String(gYear).slice(2)}`,
-            grade: gStr, term: TL[tidx], year: String(gYear), isCurrent
+            label: gradePrefix + shortTerm + ` '${String(gYear).slice(2)}`,
+            grade: gStr, term: TERMS[tidx], year: String(gYear), isCurrent
           });
         }
       }
@@ -2757,7 +2579,7 @@ function App() {
     if (page!=="results" || !classesConfigLoaded) return;
     let active = true;
     (async()=>{
-      const { prevTerm, prevYear } = getPrevTermYear(term, year, grade);
+      const { prevTerm, prevYear } = getPrevTermYear(term, year);
       const map = {};
       const addFromList = (lst) => {
         (lst||[]).forEach(l=>{
@@ -2791,16 +2613,9 @@ function App() {
   },[page, grade, commentScope, term, year]);
 
   async function saveComment(text) {
-    if (!GH) { alert("Not connected to GitHub. The comment was NOT saved."); return; }
-    const ok = await saveShared(commentKey(grade, commentScope, term, year), text);
-    if (!ok) {
-      alert("The comment could not be saved. Check your internet connection and GitHub token, then tap Save Comment again.");
-      return; // keep the box open so the text isn't lost
-    }
     setComment(text);
+    await saveShared(commentKey(grade, commentScope, term, year), text);
     setShowComment(false);
-    setCommentSaved(true);
-    setTimeout(()=>setCommentSaved(false), 3000);
   }
 
   // ── storage helpers ────────────────────────────────────────────────────
@@ -2866,7 +2681,7 @@ function App() {
       const classList = classesConfig[grade] || [""];
       let ok = true;
       for (const s of classList) {
-        const data = (learnersByStream[s]||[]).map(l=>({name:l.name,admNo:l.admNo||"",gender:l.gender||"",scores:l.scores}));
+        const data = (learnersByStream[s]||[]).map(l=>({name:l.name,admNo:l.admNo||"",scores:l.scores}));
         ok = await saveShared(learnersKey(grade,s), data) && ok;
         ok = await saveShared(storageKey(grade,s,term,year), data) && ok;
       }
@@ -2892,7 +2707,7 @@ function App() {
     const split = isSplitGrade(grade);
     const oldStream = learner.stream || stream;
     const newStream = split ? (payload.stream || oldStream) : "";
-    const updated = { name: payload.name, admNo: payload.admNo||"", gender: payload.gender||"", scores: payload.scores };
+    const updated = { name: payload.name, admNo: payload.admNo||"", scores: payload.scores };
 
     if (split && newStream !== oldStream) {
       // Move learner from old stream's list to the new one
@@ -2909,12 +2724,12 @@ function App() {
     setDirty(true);
   }
 
-  function handleAddLearner(name, streamSel, admNo, gender) {
+  function handleAddLearner(name, streamSel, admNo) {
     const split = isSplitGrade(grade);
     const targetStream = split ? (streamSel || stream) : "";
     const lrns = getLearnersByStream(targetStream);
     if (lrns.find(l=>l.name===name)){setShowAddLearner(false);return;}
-    setLearnersByStream(targetStream, [...lrns,{name,admNo:admNo||"",gender:gender||"",scores:blankScores()}]);
+    setLearnersByStream(targetStream, [...lrns,{name,admNo:admNo||"",scores:blankScores()}]);
     setShowAddLearner(false);
     setDirty(true);
   }
@@ -3242,7 +3057,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
         classesConfig={classesConfig}
         onDone={async()=>{
           setShowWizard(false);
-          const cfg = await loadShared("school_classes_config", null);
+          const cfg = await loadShared("sision_classes_config", null);
           setClassesConfig(normalizeClassesConfig(cfg));
         }}
         onSkip={()=>setShowWizard(false)}
@@ -3271,9 +3086,6 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
           {userSession.role === "admin" && <button onClick={()=>setShowWizard(true)} style={{fontSize:11,padding:"4px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:20,color:"#fff",cursor:"pointer"}}>
             🔄 Re-run Year Setup
           </button>}
-          {userSession.role === "admin" && <a href={TIMETABLE_APP_URL} style={{fontSize:11,padding:"4px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:20,color:"#fff",cursor:"pointer",textDecoration:"none",display:"inline-block"}}>
-            🗓 Timetable
-          </a>}
         </div>
       </div>
       <div style={S.homeCard}>
@@ -3315,7 +3127,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
           <div style={S.field}>
             <label style={S.label}>Term / Exam</label>
             <select style={S.select} value={term} onChange={e=>setTerm(e.target.value)}>
-              {termsFor(grade).map(t=><option key={t}>{t}</option>)}
+              {TERMS.map(t=><option key={t}>{t}</option>)}
             </select>
           </div>
           <div style={S.field}>
@@ -3326,7 +3138,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
           </div>
           <div style={S.field}>
             <label style={S.label}>Class Teacher</label>
-            <input style={S.input} value={classTeacher} onChange={e=>setClassTeacher(e.target.value)} placeholder="e.g. Mr. Peter Koech"/>
+            <input style={S.input} value={classTeacher} onChange={e=>setClassTeacher(e.target.value)} placeholder="e.g. Ms. Zipporah Kiarie"/>
           </div>
           <div style={S.field}>
             <label style={S.label}>Closing Day</label>
@@ -3424,7 +3236,7 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
               </select>
             )}
             <select style={S.select} value={subjectTerm} onChange={e=>setSubjectTerm(e.target.value)}>
-              {termsFor(subjectClass.grade).map(t=><option key={t} value={t}>{t}</option>)}
+              {TERMS.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
             <select style={S.select} value={subjectYear} onChange={e=>setSubjectYear(e.target.value)}>
               {YEARS.map(y=><option key={y} value={y}>{y}</option>)}
@@ -3432,10 +3244,6 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
             <button style={{...S.ghostBtn,...(subjectSaved?{background:"#e8f5e9",color:"#2e7d32",borderColor:"#2e7d32"}:{})}}
               onClick={uploadSubjectScores} disabled={subjectSaving || subjectLoading || subjectNotConnected}>
               {subjectSaving?"Uploading…":(subjectSaved?"✓ Uploaded!":"⬆ Upload")}
-            </button>
-            <button style={S.ghostBtn} disabled={subjectLoading || !subjectList.length}
-              onClick={()=>downloadSubjectResultsCSV(subjectChoice, subjectList, clsLabel, subjectTerm, subjectYear)}>
-              ⬇ Download
             </button>
           </div>
         </div>
@@ -3486,14 +3294,10 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
                 })}
               </tbody>
             </table>
-            <div style={{marginTop:16,display:"flex",gap:8,flexWrap:"wrap"}}>
+            <div style={{marginTop:16}}>
               <button style={{...S.ghostBtn,...(subjectSaved?{background:"#e8f5e9",color:"#2e7d32",borderColor:"#2e7d32"}:{})}}
                 onClick={uploadSubjectScores} disabled={subjectSaving || subjectLoading}>
                 {subjectSaving?"Uploading…":(subjectSaved?"✓ Uploaded!":"⬆ Upload")}
-              </button>
-              <button style={S.ghostBtn} disabled={subjectLoading || !subjectList.length}
-                onClick={()=>downloadSubjectResultsCSV(subjectChoice, subjectList, clsLabel, subjectTerm, subjectYear)}>
-                ⬇ Download
               </button>
             </div>
           </div>
@@ -3553,14 +3357,13 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
             if (dirty && !window.confirm("You have unsaved changes. Leave without saving?")) return;
             setPage("home");
           }}>← Back</button>
-          {isAdmin && <a href={TIMETABLE_APP_URL} style={{...S.backBtn, marginLeft:6, textDecoration:"none", display:"inline-block"}}>🗓 Timetable</a>}
           <div style={S.topTitle}>{label} · {term} {year}
             <span style={{display:"block",fontWeight:400,fontSize:10,color:"#777"}}>Saved locally on this laptop/browser only — not shared with anyone else</span>
             {dirty && <span style={{display:"inline-block",marginTop:3,background:"#b94a2c",color:"#fff",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10}}>● Unsaved changes</span>}
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <button style={S.ghostBtn} onClick={()=>setShowHistory(true)}>📂 History</button>
-            <button style={{...S.ghostBtn,...(commentSaved?{background:"#e8f5e9",color:"#2e7d32",borderColor:"#2e7d32"}:{})}} onClick={()=>setShowComment(true)}>{commentSaved?"✓ Comment saved":`💬 ${comment?"Edit":"Add"} Class Comment`}</button>
+            <button style={S.ghostBtn} onClick={()=>setShowComment(true)}>💬 {comment?"Edit":"Add"} Class Comment</button>
             <input style={{...S.input,maxWidth:160,fontSize:12}} placeholder="🔍 Search learner…"
               value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
             <button style={{...S.ghostBtn,...(saved?{background:"#e8f5e9",color:"#2e7d32",borderColor:"#2e7d32"}:{})}}
@@ -3636,7 +3439,6 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
                 {viewMode==="combined" && <th style={S.th}>Stream</th>}
                 <th style={{...S.th,textAlign:"left",minWidth:80}}>Assm. No.</th>
                 <th style={{...S.th,textAlign:"left",minWidth:140}}>Name</th>
-                <th style={S.th}>Sex</th>
                 {SUBJECTS.map(s=><th key={s} style={S.th}>{s}</th>)}
                 <th style={S.th}>Total</th>
                 <th style={S.th}>Avg</th>
@@ -3663,7 +3465,6 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
                     )}
                     <td style={{...S.tdC,borderRight:"1px solid #e0e0e0",fontSize:11}}>{l.admNo||"–"}</td>
                     <td style={{...S.td,fontWeight:700,borderRight:"1px solid #e0e0e0"}}>{l.name}</td>
-                    <td style={{...S.tdC,borderRight:"1px solid #e0e0e0",fontSize:11}}>{l.gender||"–"}</td>
                     {SUBJECTS.map(sub=>{
                       const tot = subjectTotal(l.scores, sub);
                       const g=getGrade(tot);
@@ -3687,43 +3488,23 @@ ${autoPrint ? "<scr"+"ipt>window.onload=function(){setTimeout(function(){window.
                   </tr>
                 );
               })}
-              {/* MEANS ROWS */}
-              {hasScores && (()=>{
-                const metaSpan = 4 + (split?1:0) + (viewMode==="combined"?1:0); // Class Rank[+Gr.Rank][+Stream]+Assm.No+Name+Sex
-                return <>
+              {/* MEANS ROW */}
+              {hasScores && (
                 <tr style={{background:"#e8e8e8",borderTop:"2px solid #000",fontWeight:700}}>
-                  <td style={S.tdC} colSpan={metaSpan}>CLASS MEAN ({means["_boysCount"]||0}B / {means["_girlsCount"]||0}G)</td>
+                  <td style={S.tdC} colSpan={split?(viewMode==="combined"?4:3):2}>CLASS MEAN</td>
                   {SUBJECTS.map(sub=>(
                     <td key={sub} style={{...S.tdC,fontSize:11}}>
                       <div style={{fontWeight:700}}>{means[sub]}</div>
                       {means[sub]!=="–"&&<div style={{fontSize:8,color:"#444"}}>{getGrade(means[sub])?.sub||""}</div>}
                     </td>
                   ))}
-                  <td colSpan={5} style={{...S.tdC,fontSize:11}}>
+                  <td colSpan={6} style={{...S.tdC,fontSize:11}}>
                     Class Mean: <b>{means["_meanTotal"]}/{means["_maxTotal"]}</b> &nbsp;(Avg: <b>{means["_classMean"]!=="–"?means["_classMean"]+"%":"–"}</b>)
                   </td>
                 </tr>
-                {means["_boysCount"]>0 && (
-                  <tr style={{background:"#eef4fb",fontWeight:600}}>
-                    <td style={S.tdC} colSpan={metaSpan}>BOYS MEAN</td>
-                    {SUBJECTS.map(sub=><td key={sub} style={{...S.tdC,fontSize:11}}>{means[sub+"_M"]}</td>)}
-                    <td colSpan={5} style={{...S.tdC,fontSize:11}}>Boys Avg: <b>{means["_boysMean"]!=="–"?means["_boysMean"]+"%":"–"}</b></td>
-                  </tr>
-                )}
-                {means["_girlsCount"]>0 && (
-                  <tr style={{background:"#fdeef3",fontWeight:600}}>
-                    <td style={S.tdC} colSpan={metaSpan}>GIRLS MEAN</td>
-                    {SUBJECTS.map(sub=><td key={sub} style={{...S.tdC,fontSize:11}}>{means[sub+"_F"]}</td>)}
-                    <td colSpan={5} style={{...S.tdC,fontSize:11}}>Girls Avg: <b>{means["_girlsMean"]!=="–"?means["_girlsMean"]+"%":"–"}</b></td>
-                  </tr>
-                )}
-                </>;
-              })()}
+              )}
             </tbody>
           </table>
-        </div>
-        <div style={{fontSize:10.5,color:"#666",margin:"6px 2px 0",lineHeight:1.6}} className="no-print">
-          <b>Key:</b> {SUBJECTS.map(s=>`${s} = ${subjectKey(s)}`).join("  ·  ")}
         </div>
 
         {/* ── ALWAYS-RENDERED DOWNLOAD SOURCE (hidden) ──────────────────────
@@ -3818,7 +3599,7 @@ const S = {
 
 const RC = {
   page:        {background:"#fff",color:"#000",width:"190mm",minHeight:"160mm",margin:"0 auto 4mm",padding:"10mm 12mm",fontFamily:"Arial,sans-serif",fontSize:11,boxSizing:"border-box",border:"1px solid #888"},
-  header:      {borderBottom:"3px solid #000",marginBottom:8,paddingBottom:7,textAlign:"center",position:"relative"},
+  header:      {borderBottom:"3px solid #000",marginBottom:8,paddingBottom:7,textAlign:"center"},
   schoolName:  {fontSize:20,fontWeight:900,letterSpacing:1,color:"#000"},
   schoolSub:   {fontSize:10,color:"#444"},
   reportTitle: {fontSize:12,fontWeight:700,marginTop:4,color:"#000"},
